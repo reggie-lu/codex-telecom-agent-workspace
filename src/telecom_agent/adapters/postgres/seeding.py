@@ -1,32 +1,17 @@
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from telecom_agent.adapters.postgres.models import SyntheticCustomerRecord
-
-
-@dataclass(frozen=True, slots=True)
-class SyntheticCustomerSeed:
-    customer_id: UUID
-    display_name: str
-    raw_token: str
+from telecom_agent.development import SyntheticCustomerSeed
 
 
 class SeedResult(StrEnum):
     CREATED = "created"
     EXISTING = "existing"
-
-
-DEVELOPMENT_CUSTOMER = SyntheticCustomerSeed(
-    customer_id=UUID("10000000-0000-0000-0000-000000000001"),
-    display_name="Synthetic Alice",
-    raw_token="synthetic-alice-token",
-)
 
 
 def seed_synthetic_customer(

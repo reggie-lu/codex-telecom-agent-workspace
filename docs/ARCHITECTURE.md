@@ -37,6 +37,18 @@ Approved conversation-creation contract:
 - Every successful request creates a distinct conversation; idempotency is deferred.
 - `open` is the only approved initial conversation status.
 
+Approved grounded current-plan message contract:
+
+- `POST /v1/conversations/{conversation_id}/messages` requires customer ownership and trimmed
+  Unicode `content` of 1–2,000 characters.
+- Success persists and returns both user and assistant messages with `201 Created`.
+- Assistant answers expose `grounded`, `unavailable`, or `unsupported`, an uncertainty flag, and
+  typed plan-snapshot evidence when grounded.
+- Missing plan data and unsupported questions produce safe persisted exchanges rather than invented
+  facts or transport failures.
+- Missing and cross-customer conversations share `404 conversation_not_found`; invalid content uses
+  stable `422 invalid_message`.
+
 ## 3. Technology Stack
 
 - Python 3.12+; local environment currently uses Python 3.13.5.
@@ -149,7 +161,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 14:35 JST
+Last updated: 2026-08-26 14:59 JST
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -172,11 +184,11 @@ flowchart TB
     ConversationService --> ConversationRepo[Conversation repository]
     ConversationRepo --> DB[(Local PostgreSQL)]
 
-    Auth -. approved next flow .-> Message[Send support message]
-    Message -.-> Support[Grounded support orchestration]
-    Support -.-> KDDI[Synthetic KDDI plan and billing data]
-    Support -.-> Model[SambaNova MiniMax-M3]
-    Support -.-> DB
+    Auth --> Message[Send support message]
+    Message --> Support[Deterministic grounded plan orchestration]
+    Support --> KDDI[Synthetic KDDI current-plan data]
+    Support -. approved next boundary .-> Model[SambaNova MiniMax-M3]
+    Support --> DB
     Support -.-> Escalation[Mock human escalation]
 
     Local[Localhost runtime] -. future approval .-> Docker[Docker packaging]
@@ -186,8 +198,8 @@ flowchart TB
     classDef agreed fill:#dbeafe,stroke:#2563eb,color:#111
     classDef deferred fill:#eeeeee,stroke:#777,color:#333,stroke-dasharray:5 5
 
-    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,DB,Local implemented
-    class Message,Support,KDDI,Model,Escalation agreed
+    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Support,KDDI,DB,Local implemented
+    class Model,Escalation agreed
     class Docker,K8s deferred
 ```
 
@@ -211,10 +223,22 @@ GET /health                -> SELECT 1 -> 200 ok or 503 unavailable
 Ctrl-C                     -> graceful API shutdown -> dispose database engine
 ```
 
+Current grounded plan flow:
+
+```text
+POST /v1/conversations/{id}/messages
+  -> authenticate customer and verify conversation ownership
+  -> classify current-plan intent deterministically
+  -> retrieve typed Synthetic KDDI plan facts
+  -> create plan snapshot and evidence-templated answer
+  -> atomically persist user message, assistant message, snapshot, and evidence
+  -> 201 grounded, unavailable, or unsupported exchange
+```
+
 ## 13. Open Architecture Questions
 
-- Exact schemas, errors, status codes, and idempotency for endpoints after conversation creation.
-- Exact tables and constraints for messages, snapshots, bills, charges, and escalations.
+- Exact schemas, errors, status codes, and idempotency for endpoints after message submission.
+- Exact tables and constraints for bills, charges, and escalations.
 - Conversation lifecycle beyond creation and escalation.
 - Exact model timeout and local endpoint configuration.
 - Escalation-success metric and evaluation dataset/scorer implementation.

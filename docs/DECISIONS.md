@@ -156,3 +156,13 @@ customer authentication. On healthy PostgreSQL it returns only
 `503 {"status":"unavailable","database":"unavailable"}`. It is localhost-only in the current
 runtime and must remain internal rather than publicly routed in future deployments. Never expose
 credentials, addresses, exception text, or customer data.
+
+## D-022 — Deterministic grounding before model generation
+
+Date: 2026-08-26 · Status: Accepted
+
+Implement the first current-plan message answer with deterministic intent matching and an
+evidence-templated explanation. Persist both messages, a typed plan snapshot, explicit uncertainty,
+and the evidence link atomically. Missing plan data and unsupported questions return safe persisted
+answers; missing and cross-customer conversations share a privacy-preserving `404`. SambaNova
+generation is deferred to a separately evaluated slice behind this grounding boundary.

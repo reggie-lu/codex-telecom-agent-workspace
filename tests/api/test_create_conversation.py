@@ -26,6 +26,19 @@ class RecordingConversationRepository:
     def add(self, conversation: Conversation) -> None:
         self.saved.append(conversation)
 
+    def is_owned_by(self, _conversation_id: UUID, _customer_id: UUID) -> bool:
+        return False
+
+
+class UnusedCurrentPlans:
+    def get_current_plan(self, _customer_id: UUID) -> None:
+        return None
+
+
+class UnusedExchanges:
+    def add(self, _exchange: object) -> None:
+        raise AssertionError("Conversation creation must not persist messages")
+
 
 class HealthyDatabase:
     def is_healthy(self) -> bool:
@@ -43,6 +56,8 @@ def client(repository: RecordingConversationRepository) -> TestClient:
         customer_identities=StubCustomerIdentityRepository(),
         conversations=repository,
         database_health=HealthyDatabase(),
+        current_plans=UnusedCurrentPlans(),
+        exchanges=UnusedExchanges(),
     )
     return TestClient(app)
 

@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — local runtime awaiting human verification
+Status: Active implementation — grounded current-plan messaging awaiting human verification
 
 ## Purpose
 
@@ -58,10 +58,11 @@ Apply the database schema:
 uv run alembic upgrade head
 ```
 
-The first migration should finish with output similar to:
+On a new database, the migrations finish with output similar to:
 
 ```text
 Running upgrade  -> 20260826_01, create conversations
+Running upgrade 20260826_01 -> 20260826_02, Create messages and plan snapshots.
 ```
 
 To stop PostgreSQL later without deleting its data:
@@ -114,7 +115,40 @@ curl -i -X POST http://127.0.0.1:8000/v1/conversations \
 ```
 
 Expect `HTTP/1.1 201 Created` and a JSON body containing a generated `id`, `open` status, and UTC
-`created_at` timestamp. Verify the authentication failure contract separately:
+`created_at` timestamp. Copy its `id` into the shell used for the remaining requests:
+
+```bash
+CONVERSATION_ID='<paste-conversation-id>'
+```
+
+Ask for the current synthetic KDDI plan:
+
+```bash
+curl -i -X POST \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/messages" \
+  -H 'Authorization: Bearer synthetic-alice-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"content":"What is my current plan?"}'
+```
+
+Expect `HTTP/1.1 201 Created`. The assistant message must have `answer_status: "grounded"`,
+`uncertain: false`, and one `plan_snapshot` evidence reference. Its explanation should contain only
+the synthetic plan facts: 20 GB, JPY 4,500, and an August 1, 2026 effective date.
+
+Verify safe handling of a question outside the implemented slice:
+
+```bash
+curl -i -X POST \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/messages" \
+  -H 'Authorization: Bearer synthetic-alice-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"content":"Why is my bill higher?"}'
+```
+
+Expect `201 Created` with `answer_status: "unsupported"`, `uncertain: true`, no evidence, and a
+clear statement that billing support is not implemented yet.
+
+Verify the authentication failure contract separately:
 
 ```bash
 curl -i -X POST http://127.0.0.1:8000/v1/conversations
@@ -134,6 +168,19 @@ Optionally confirm the persisted conversation:
       FROM conversations
       ORDER BY created_at DESC
       LIMIT 5;"
+```
+
+Confirm the persisted message exchange:
+
+```bash
+/opt/homebrew/bin/psql \
+  -h 127.0.0.1 \
+  -p 55432 \
+  -d telecom_agent \
+  -c "SELECT role, answer_status, uncertain, content, created_at
+      FROM messages
+      WHERE conversation_id = '${CONVERSATION_ID}'
+      ORDER BY created_at;"
 ```
 
 To include PostgreSQL integration coverage, create an isolated test database once and set

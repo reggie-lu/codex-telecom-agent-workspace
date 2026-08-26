@@ -10,11 +10,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from telecom_agent.adapters.postgres.seeding import (
-    DEVELOPMENT_CUSTOMER,
     SeedResult,
     seed_synthetic_customer,
 )
 from telecom_agent.api.composition import create_postgres_app
+from telecom_agent.development import DEVELOPMENT_CUSTOMER
 
 
 class ServerRunner(Protocol):

@@ -16,6 +16,19 @@ class UnusedConversations:
     def add(self, _conversation: Conversation) -> None:
         raise AssertionError("The health endpoint must not access conversations")
 
+    def is_owned_by(self, _conversation_id: UUID, _customer_id: UUID) -> bool:
+        raise AssertionError("The health endpoint must not access conversations")
+
+
+class UnusedCurrentPlans:
+    def get_current_plan(self, _customer_id: UUID) -> None:
+        raise AssertionError("The health endpoint must not access plans")
+
+
+class UnusedExchanges:
+    def add(self, _exchange: object) -> None:
+        raise AssertionError("The health endpoint must not access messages")
+
 
 class StubDatabaseHealth:
     def __init__(self, healthy: bool) -> None:
@@ -45,6 +58,8 @@ def test_health_reports_only_approved_database_status(
         customer_identities=UnusedCustomerIdentities(),
         conversations=UnusedConversations(),
         database_health=StubDatabaseHealth(healthy),
+        current_plans=UnusedCurrentPlans(),
+        exchanges=UnusedExchanges(),
     )
 
     response = TestClient(app).get("/health")
@@ -59,6 +74,8 @@ def test_health_openapi_documents_unavailable_response() -> None:
         customer_identities=UnusedCustomerIdentities(),
         conversations=UnusedConversations(),
         database_health=StubDatabaseHealth(True),
+        current_plans=UnusedCurrentPlans(),
+        exchanges=UnusedExchanges(),
     )
 
     schema = TestClient(app).get("/openapi.json").json()
