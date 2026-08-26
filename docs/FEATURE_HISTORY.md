@@ -13,9 +13,9 @@ limitations while the prototype evolves.
 | Local operations | Stable seed, serve, health, and graceful-shutdown workflow | Human verified |
 | Current-plan support | Grounded plan messages with typed evidence and safe limitations | Human verified |
 | Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
-| Billing support | Latest-bill and unexpected-charge investigation | Agreed, not implemented |
+| Billing support | Latest-bill and unexpected-charge investigation | Latest bill human verified; investigation agreed |
 | Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
-| Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; live routine gate blocked |
+| Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; current-plan gates pass |
 | Packaging | Docker development runtime | Deferred; requires approval |
 | Deployment | Kubernetes or Helm deployment | Deferred; requires approval |
 
@@ -291,3 +291,56 @@ Known limitations:
 - Customer and plan data remain synthetic, and the grounding guard remains rule-based.
 - Docker, Kubernetes, production KDDI identity/data, public deployment, and production operations
   remain deferred.
+
+### CP-007 — Grounded Latest-Bill Summary
+
+- Recorded: 2026-08-26 18:14 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `6fdae739b94b7f1834a2dc906a278ff9fb6e2cbc`
+- Commit time: 2026-08-26 18:14:16 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: establishes typed, reconciled latest-bill evidence as the factual
+foundation required before the agent can investigate an unexpected charge.
+
+Feature breakdown:
+
+- Direct latest-bill questions use the existing authenticated conversation message endpoint.
+- The synthetic KDDI adapter returns the approved July 1–31, 2026 bill totaling JPY 6,930 with four
+  ordered line items that reconcile exactly to the total.
+- The service validates the billing period, currency, source, nonnegative values, nonempty line
+  items, and exact decimal reconciliation before producing a grounded answer.
+- Migration `20260826_03` adds typed bill snapshots, ordered line items, and message-to-bill
+  evidence. The complete exchange is persisted atomically.
+- Missing or inconsistent billing data returns a safe unavailable answer without amounts or
+  evidence. Unexpected-charge questions remain explicitly unsupported.
+- The orchestration class is now named `SendSupportMessageService` because it handles both current
+  plan and latest-bill intents.
+
+Verification evidence:
+
+- Codex verification: 73 pytest tests passed with PostgreSQL integration enabled; Ruff and strict
+  mypy passed across 55 source files.
+- Migration verification: `20260826_03` upgraded the local database to head, and `alembic check`
+  reported no new upgrade operations.
+- Codex localhost verification: conversation creation and latest-bill submission both returned
+  `201`; the answer was grounded, certain, exact, and referenced one `bill_snapshot`.
+- Existing current-plan regression gate: routine 10/10, safety 6/6, release gate pass in offline
+  mode.
+- Human verification: the documented API request independently returned the approved period,
+  total, four line items, grounded status, false uncertainty, and typed evidence on 2026-08-26.
+- Reproduction steps: see `README.md`, sections **Manual API Verification** and the persisted bill
+  query following it.
+
+Known limitations:
+
+- The latest-bill response is deterministic; it does not call MiniMax-M3 and has no dedicated
+  billing evaluation dataset yet.
+- Unexpected-charge identification and explanation remain unimplemented, including why the
+  international roaming data item appeared.
+- Conversation-history retrieval and human escalation remain unimplemented.
+- Customer and bill data are synthetic; real KDDI identity, APIs, compliance, and operations remain
+  deferred.
+- Docker, Kubernetes, and public deployment remain deferred.
