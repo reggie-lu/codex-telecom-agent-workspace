@@ -67,3 +67,29 @@ and prove the improvement against the same corner cases before expanding scope.
 The independent human run produced the same perfect routine and safety scores. That closes the
 remediation as a human-verified development checkpoint and gives the next feature a clean,
 repeatable current-plan foundation.
+
+The next logical capability is the latest bill. It is deliberately placed before unexpected-charge
+investigation: the agent first needs a trustworthy bill period, total, and set of line items before
+it can reason about which charge surprised the customer. Treating that retrieval and explanation as
+its own vertical slice keeps the evidence model observable and gives missing billing data a safe,
+testable behavior before diagnostic logic is introduced.
+
+That latest-bill boundary is now approved. Implementation will continue through the existing
+conversation endpoint and introduce no direct public bill resource. Before code can claim any
+amount or billing period, the synthetic fixture itself needs explicit human approval; grounding
+starts with deciding exactly which facts are allowed to be true.
+
+The approved bill now travels through that boundary as typed evidence. Its four ordered line items
+sum exactly to JPY 6,930 before the service is allowed to compose an answer. The snapshot, items,
+messages, and evidence link are written in one PostgreSQL transaction; absent or inconsistent data
+produces a limitation without leaking any remembered amount. MiniMax-M3 is intentionally absent
+from this path, keeping the first billing milestone about factual integrity rather than phrasing.
+
+The intent boundary also stays honest. “What is my latest bill?” receives the summary, while “Why
+is my bill higher?” remains unsupported because answering it requires the next charge-investigation
+slice. That distinction prevents a list of charges from masquerading as an explanation.
+
+The human-run API verification returned the same period, total, four line items, grounded status,
+and bill-snapshot evidence. The latest-bill foundation is therefore complete as a development
+checkpoint; the roaming item is available for the next slice to investigate without yet claiming
+why it appeared.

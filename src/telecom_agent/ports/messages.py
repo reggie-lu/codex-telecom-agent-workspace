@@ -1,6 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
+from telecom_agent.domain.bills import LatestBillDetails
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts
 
@@ -15,6 +16,10 @@ class ConversationAccessRepository(Protocol):
 
 class CurrentPlanProvider(Protocol):
     def get_current_plan(self, customer_id: UUID) -> CurrentPlanDetails | None: ...
+
+
+class LatestBillProvider(Protocol):
+    def get_latest_bill(self, customer_id: UUID) -> LatestBillDetails | None: ...
 
 
 class CurrentPlanAnswerGenerator(Protocol):

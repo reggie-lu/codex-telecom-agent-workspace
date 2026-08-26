@@ -19,7 +19,7 @@ from telecom_agent.adapters.sambanova.current_plan_answers import (
 from telecom_agent.domain.messages import AnswerStatus, MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts
 from telecom_agent.ports.messages import CurrentPlanAnswerGenerator
-from telecom_agent.services.send_current_plan_message import SendCurrentPlanMessageService
+from telecom_agent.services.send_support_message import SendSupportMessageService
 
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
 CONVERSATION_ID = UUID("20000000-0000-0000-0000-000000000001")
@@ -246,7 +246,7 @@ def evaluate_cases(
         )
         assert generator is not None
         exchanges = _RecordingExchanges()
-        service = SendCurrentPlanMessageService(
+        service = SendSupportMessageService(
             conversations=_OwnedConversation(),
             current_plans=_CaseCurrentPlans(case.plan_available),
             answer_generator=generator,

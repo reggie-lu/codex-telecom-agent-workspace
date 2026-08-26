@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
+from telecom_agent.domain.bills import BillSnapshot
 from telecom_agent.domain.plans import PlanSnapshot
 
 
@@ -19,6 +20,7 @@ class AnswerStatus(StrEnum):
 
 class EvidenceType(StrEnum):
     PLAN_SNAPSHOT = "plan_snapshot"
+    BILL_SNAPSHOT = "bill_snapshot"
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,4 +45,5 @@ class Message:
 class MessageExchange:
     user_message: Message
     assistant_message: Message
-    plan_snapshot: PlanSnapshot | None
+    plan_snapshot: PlanSnapshot | None = None
+    bill_snapshot: BillSnapshot | None = None

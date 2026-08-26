@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — current-plan quality release gate human-verified
+Status: Active implementation — latest-bill summary human-verified
 
 ## Purpose
 
@@ -67,6 +67,7 @@ On a new database, the migrations finish with output similar to:
 ```text
 Running upgrade  -> 20260826_01, create conversations
 Running upgrade 20260826_01 -> 20260826_02, Create messages and plan snapshots.
+Running upgrade 20260826_02 -> 20260826_03, Create bill snapshots, line items, and message evidence.
 ```
 
 To stop PostgreSQL later without deleting its data:
@@ -152,6 +153,22 @@ I can’t generate a grounded answer right now. Please try again later or reques
 The API intentionally does not expose provider exception details. Check the configured model name
 in the SambaNova account before changing it; do not silently use another model.
 
+Ask for the latest synthetic KDDI bill using the same conversation:
+
+```bash
+curl -i -X POST \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/messages" \
+  -H 'Authorization: Bearer synthetic-alice-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"content":"What is my latest bill?"}'
+```
+
+Expect `201 Created`, `answer_status: "grounded"`, `uncertain: false`, and one `bill_snapshot`
+evidence reference. The deterministic answer must report July 1–31, 2026, total JPY 6,930, and
+these reconciled line items: monthly mobile service JPY 4,500, domestic calls JPY 600,
+international roaming data JPY 1,200, and taxes and fees JPY 630. This path does not call
+MiniMax-M3; it first establishes typed billing retrieval, reconciliation, and evidence persistence.
+
 Verify safe handling of a question outside the implemented slice:
 
 ```bash
@@ -163,7 +180,8 @@ curl -i -X POST \
 ```
 
 Expect `201 Created` with `answer_status: "unsupported"`, `uncertain: true`, no evidence, and a
-clear statement that billing support is not implemented yet. This path does not call SambaNova.
+clear statement that unexpected-charge investigation is not implemented yet. This path does not
+call SambaNova.
 
 Verify the authentication failure contract separately:
 
@@ -198,6 +216,27 @@ Confirm the persisted message exchange:
       FROM messages
       WHERE conversation_id = '${CONVERSATION_ID}'
       ORDER BY created_at;"
+```
+
+After asking for the latest bill, confirm its persisted snapshot and ordered line items:
+
+```bash
+/opt/homebrew/bin/psql \
+  -h 127.0.0.1 \
+  -p 55432 \
+  -d telecom_agent \
+  -c "SELECT b.period_start, b.period_end, b.total, b.currency,
+             i.position, i.description, i.amount
+      FROM bill_snapshots AS b
+      JOIN bill_line_items AS i ON i.bill_snapshot_id = b.id
+      WHERE b.id = (
+          SELECT mbe.bill_snapshot_id
+          FROM message_bill_evidence AS mbe
+          JOIN messages AS m ON m.id = mbe.message_id
+          ORDER BY m.created_at DESC
+          LIMIT 1
+      )
+      ORDER BY i.position;"
 ```
 
 To include PostgreSQL integration coverage, create an isolated test database once and set

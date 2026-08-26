@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from telecom_agent.adapters.kddi_mock.current_plans import SyntheticKddiCurrentPlanProvider
+from telecom_agent.adapters.kddi_mock.latest_bills import SyntheticKddiLatestBillProvider
 from telecom_agent.adapters.postgres.health import SqlAlchemyDatabaseHealth
 from telecom_agent.adapters.postgres.repositories import (
     SqlAlchemyConversationRepository,
@@ -42,6 +43,7 @@ def create_postgres_app(
         conversations=SqlAlchemyConversationRepository(session_factory),
         database_health=SqlAlchemyDatabaseHealth(engine),
         current_plans=SyntheticKddiCurrentPlanProvider(),
+        latest_bills=SyntheticKddiLatestBillProvider(),
         answer_generator=(
             answer_generator or SambaNovaCurrentPlanAnswerGenerator(sambanova_settings)
         ),

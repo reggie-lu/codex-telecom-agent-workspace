@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
+from telecom_agent.domain.bills import BillLineItem, LatestBillDetails
 from telecom_agent.domain.conversations import Conversation
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails
@@ -56,6 +57,29 @@ class StubCurrentPlans:
         )
 
 
+class StubLatestBills:
+    def __init__(self, available: bool = True) -> None:
+        self.available = available
+
+    def get_latest_bill(self, customer_id: UUID) -> LatestBillDetails | None:
+        assert customer_id == CUSTOMER_ID
+        if not self.available:
+            return None
+        return LatestBillDetails(
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            total=Decimal("6930.00"),
+            currency="JPY",
+            line_items=(
+                BillLineItem("monthly_service", "Monthly mobile service", Decimal("4500.00")),
+                BillLineItem("domestic_calls", "Domestic calls", Decimal("600.00")),
+                BillLineItem("roaming_data", "International roaming data", Decimal("1200.00")),
+                BillLineItem("taxes_fees", "Taxes and fees", Decimal("630.00")),
+            ),
+            source_version="synthetic-kddi-bill-v1",
+        )
+
+
 class RecordingExchanges:
     def __init__(self) -> None:
         self.saved: list[MessageExchange] = []
@@ -73,6 +97,7 @@ def build_client(
     *,
     owned: bool = True,
     plan_available: bool = True,
+    bill_available: bool = True,
 ) -> tuple[TestClient, RecordingExchanges]:
     exchanges = RecordingExchanges()
     app = create_app(
@@ -80,10 +105,49 @@ def build_client(
         conversations=StubConversations(owned),
         database_health=HealthyDatabase(),
         current_plans=StubCurrentPlans(plan_available),
+        latest_bills=StubLatestBills(bill_available),
         answer_generator=DeterministicAnswerGenerator(),
         exchanges=exchanges,
     )
     return TestClient(app), exchanges
+
+
+def test_latest_bill_message_returns_grounded_bill_evidence() -> None:
+    client, exchanges = build_client()
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": "Show me my latest bill"},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "grounded"
+    assert assistant["uncertain"] is False
+    assert assistant["evidence"][0]["type"] == "bill_snapshot"
+    assert "July 1–31, 2026" in assistant["content"]
+    assert "JPY 6,930" in assistant["content"]
+    assert "International roaming data — JPY 1,200" in assistant["content"]
+    assert exchanges.saved[0].bill_snapshot is not None
+
+
+def test_unavailable_latest_bill_returns_safe_persisted_exchange() -> None:
+    client, exchanges = build_client(bill_available=False)
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": "What is my latest bill?"},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "unavailable"
+    assert assistant["uncertain"] is True
+    assert assistant["evidence"] == []
+    assert "6,930" not in assistant["content"]
+    assert len(exchanges.saved) == 1
 
 
 def test_current_plan_message_returns_approved_grounded_exchange_contract() -> None:

@@ -201,3 +201,15 @@ grounding guard unchanged. Recognize the two approved current-plan paraphrases, 
 canonical values exactly once even when a question asks about a single fact. Validate remediation
 by rerunning the same offline and opt-in live evaluations so the new score remains comparable to
 the first baseline.
+
+## D-026 — Latest bill before charge diagnosis
+
+Date: 2026-08-26 · Status: Accepted
+
+Implement latest-bill summary as a separate deterministic vertical slice before unexpected-charge
+investigation. Use the existing authenticated conversation message endpoint. Retrieve the approved
+Synthetic Alice bill for July 1–31, 2026 with total JPY 6,930 and four ordered line items totaling
+that amount. Persist typed bill and line-item snapshots and attach one `bill_snapshot` evidence
+reference. Reject absent, structurally invalid, negative, or non-reconciling billing data with a
+safe unavailable answer containing no billing claims. Do not call MiniMax-M3 or infer why a charge
+occurred in this slice.

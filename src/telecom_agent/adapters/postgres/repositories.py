@@ -4,14 +4,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from telecom_agent.adapters.postgres.models import (
+    BillLineItemRecord,
+    BillSnapshotRecord,
     ConversationRecord,
+    MessageBillEvidenceRecord,
     MessagePlanEvidenceRecord,
     MessageRecord,
     PlanSnapshotRecord,
     SyntheticCustomerRecord,
 )
 from telecom_agent.domain.conversations import Conversation
-from telecom_agent.domain.messages import MessageExchange
+from telecom_agent.domain.messages import EvidenceType, MessageExchange
 
 
 class SqlAlchemyCustomerIdentityRepository:
@@ -79,6 +82,36 @@ class SqlAlchemyMessageExchangeRepository:
                     )
                 )
 
+            if exchange.bill_snapshot is not None:
+                bill = exchange.bill_snapshot
+                session.add(
+                    BillSnapshotRecord(
+                        id=bill.id,
+                        customer_id=bill.customer_id,
+                        period_start=bill.period_start,
+                        period_end=bill.period_end,
+                        total=bill.total,
+                        currency=bill.currency,
+                        retrieved_at=bill.retrieved_at,
+                        source_version=bill.source_version,
+                        availability=bill.availability.value,
+                    )
+                )
+                session.flush()
+                session.add_all(
+                    [
+                        BillLineItemRecord(
+                            id=item.id,
+                            bill_snapshot_id=bill.id,
+                            code=item.code,
+                            description=item.description,
+                            amount=item.amount,
+                            position=position,
+                        )
+                        for position, item in enumerate(bill.line_items)
+                    ]
+                )
+
             for message in (exchange.user_message, exchange.assistant_message):
                 session.add(
                     MessageRecord(
@@ -98,9 +131,17 @@ class SqlAlchemyMessageExchangeRepository:
 
             session.flush()
             for evidence in exchange.assistant_message.evidence:
-                session.add(
-                    MessagePlanEvidenceRecord(
-                        message_id=exchange.assistant_message.id,
-                        plan_snapshot_id=evidence.id,
+                if evidence.type is EvidenceType.PLAN_SNAPSHOT:
+                    session.add(
+                        MessagePlanEvidenceRecord(
+                            message_id=exchange.assistant_message.id,
+                            plan_snapshot_id=evidence.id,
+                        )
                     )
-                )
+                elif evidence.type is EvidenceType.BILL_SNAPSHOT:
+                    session.add(
+                        MessageBillEvidenceRecord(
+                            message_id=exchange.assistant_message.id,
+                            bill_snapshot_id=evidence.id,
+                        )
+                    )

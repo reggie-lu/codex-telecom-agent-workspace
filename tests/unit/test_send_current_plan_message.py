@@ -8,9 +8,9 @@ import pytest
 from telecom_agent.domain.messages import AnswerStatus, EvidenceType, MessageExchange, MessageRole
 from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts
 from telecom_agent.ports.messages import AnswerGenerationUnavailableError
-from telecom_agent.services.send_current_plan_message import (
+from telecom_agent.services.send_support_message import (
     ConversationNotFoundError,
-    SendCurrentPlanMessageService,
+    SendSupportMessageService,
 )
 
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -91,7 +91,7 @@ def build_service(
     ids: list[UUID] | None = None,
     generator: StubAnswerGenerator | None = None,
 ) -> tuple[
-    SendCurrentPlanMessageService,
+    SendSupportMessageService,
     StubCurrentPlans,
     RecordingExchanges,
     StubAnswerGenerator,
@@ -102,7 +102,7 @@ def build_service(
     plans = StubCurrentPlans(plan)
     exchanges = RecordingExchanges()
     selected_generator = generator or StubAnswerGenerator()
-    service = SendCurrentPlanMessageService(
+    service = SendSupportMessageService(
         conversations=StubConversationAccess(owned),
         current_plans=plans,
         exchanges=exchanges,
@@ -193,8 +193,8 @@ def test_unsupported_question_is_persisted_without_querying_or_inventing_plan_da
     assert exchange.assistant_message.uncertain is True
     assert exchange.assistant_message.evidence == ()
     assert exchange.assistant_message.content == (
-        "I can currently explain your current mobile plan. "
-        "Billing, unexpected-charge, and other requests are not implemented yet."
+        "I can currently explain your current mobile plan or summarize your latest bill. "
+        "Unexpected-charge investigation and other requests are not implemented yet."
     )
     assert plans.requests == []
     assert generator.requests == []

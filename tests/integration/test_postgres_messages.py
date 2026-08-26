@@ -1,6 +1,7 @@
 import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -11,7 +12,10 @@ from sqlalchemy import Engine, create_engine, delete, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from telecom_agent.adapters.postgres.models import (
+    BillLineItemRecord,
+    BillSnapshotRecord,
     ConversationRecord,
+    MessageBillEvidenceRecord,
     MessagePlanEvidenceRecord,
     MessageRecord,
     PlanSnapshotRecord,
@@ -62,22 +66,30 @@ def session_factory(migrated_engine: Engine) -> sessionmaker[Session]:
 @pytest.fixture(autouse=True)
 def clean_records(session_factory: sessionmaker[Session]) -> Iterator[None]:
     with session_factory.begin() as session:
+        session.execute(delete(MessageBillEvidenceRecord))
         session.execute(delete(MessagePlanEvidenceRecord))
         session.execute(delete(MessageRecord))
+        session.execute(delete(BillLineItemRecord))
+        session.execute(delete(BillSnapshotRecord))
         session.execute(delete(PlanSnapshotRecord))
         session.execute(delete(ConversationRecord))
         session.execute(delete(SyntheticCustomerRecord))
     yield
 
 
-def test_second_migration_creates_message_and_plan_snapshot_schema(
+def test_migrations_create_message_plan_and_bill_snapshot_schema(
     migrated_engine: Engine,
 ) -> None:
     inspector = inspect(migrated_engine)
 
-    assert {"plan_snapshots", "messages", "message_plan_evidence"} <= set(
-        inspector.get_table_names()
-    )
+    assert {
+        "plan_snapshots",
+        "messages",
+        "message_plan_evidence",
+        "bill_snapshots",
+        "bill_line_items",
+        "message_bill_evidence",
+    } <= set(inspector.get_table_names())
     message_columns = {column["name"] for column in inspector.get_columns("messages")}
     assert message_columns == {
         "id",
@@ -87,6 +99,18 @@ def test_second_migration_creates_message_and_plan_snapshot_schema(
         "created_at",
         "answer_status",
         "uncertain",
+    }
+    bill_columns = {column["name"] for column in inspector.get_columns("bill_snapshots")}
+    assert bill_columns == {
+        "id",
+        "customer_id",
+        "period_start",
+        "period_end",
+        "total",
+        "currency",
+        "retrieved_at",
+        "source_version",
+        "availability",
     }
 
 
@@ -189,3 +213,58 @@ def test_postgres_composition_persists_grounded_message_exchange(
     assert snapshot.currency == "JPY"
     assert evidence is not None
     assert evidence.plan_snapshot_id == snapshot.id
+
+
+def test_postgres_composition_persists_latest_bill_and_line_item_evidence(
+    session_factory: sessionmaker[Session],
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
+    client = TestClient(
+        create_postgres_app(
+            TEST_DATABASE_URL,
+            TEST_SAMBANOVA_SETTINGS,
+            answer_generator=DeterministicAnswerGenerator(),
+        )
+    )
+    headers = {"Authorization": f"Bearer {DEVELOPMENT_CUSTOMER.raw_token}"}
+    conversation_response = client.post("/v1/conversations", headers=headers)
+    conversation_id = UUID(conversation_response.json()["id"])
+
+    response = client.post(
+        f"/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"content": "What is my latest bill?"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assistant_message_id = UUID(body["assistant_message"]["id"])
+    evidence_id = UUID(body["assistant_message"]["evidence"][0]["id"])
+    with session_factory() as session:
+        snapshot = session.get(BillSnapshotRecord, evidence_id)
+        line_items = session.scalars(
+            select(BillLineItemRecord)
+            .where(BillLineItemRecord.bill_snapshot_id == evidence_id)
+            .order_by(BillLineItemRecord.position)
+        ).all()
+        evidence = session.scalar(
+            select(MessageBillEvidenceRecord).where(
+                MessageBillEvidenceRecord.message_id == assistant_message_id
+            )
+        )
+
+    assert snapshot is not None
+    assert snapshot.customer_id == DEVELOPMENT_CUSTOMER.customer_id
+    assert snapshot.period_start.isoformat() == "2026-07-01"
+    assert snapshot.period_end.isoformat() == "2026-07-31"
+    assert snapshot.total == Decimal("6930.00")
+    assert snapshot.currency == "JPY"
+    assert [(item.description, item.amount) for item in line_items] == [
+        ("Monthly mobile service", Decimal("4500.00")),
+        ("Domestic calls", Decimal("600.00")),
+        ("International roaming data", Decimal("1200.00")),
+        ("Taxes and fees", Decimal("630.00")),
+    ]
+    assert evidence is not None
+    assert evidence.bill_snapshot_id == snapshot.id

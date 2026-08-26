@@ -79,3 +79,38 @@
   development evidence until the human independently reproduces it.
 - Independent human verification reproduced 10/10 routine, 6/6 safety, and a passing release gate;
   the remediation can now be recorded as a development checkpoint.
+
+## 2026-08-26 — Selecting the next MVP slice
+
+- Latest-bill explanation (`UC-002`) is the next dependency in the approved MVP: unexpected-charge
+  investigation needs a bill and its line items before it can identify or explain a specific charge.
+- Keep latest-bill retrieval separate from unexpected-charge reasoning so typed billing evidence,
+  persistence, ownership, and missing-data behavior can be verified before adding diagnosis.
+- The next human decision is whether to approve that narrow latest-bill summary as its own vertical
+  slice or combine it with unexpected-charge investigation.
+
+## 2026-08-26 — Latest-bill slice approved
+
+- The human approved latest-bill summary as a focused vertical slice before unexpected-charge
+  diagnosis.
+- Exact synthetic billing facts must be approved before tests or implementation encode them;
+  examples are not requirements.
+- Deterministic bill wording is the recommended first boundary, matching the earlier plan-first
+  approach: establish typed retrieval, evidence, persistence, and safe absence before adding model
+  variability or diagnostic reasoning.
+
+## 2026-08-26 — Latest-bill implementation
+
+- Reconcile the bill before creating snapshot identifiers or wording: a nonempty item set, valid
+  period, nonnegative amounts, and exact decimal sum are deterministic safety prerequisites.
+- A bill summary and an unexpected-charge explanation are different intents. Direct bill requests
+  are supported; diagnostic language such as `why`, `higher`, or `unexpected` remains unsupported.
+- SQLAlchemy did not order independent bill-snapshot and line-item mapper inserts from foreign-key
+  columns alone. An explicit parent flush inside the same transaction preserves atomicity and makes
+  the dependency unambiguous.
+- Renaming the orchestration class to `SendSupportMessageService` keeps its responsibility accurate
+  now that one conversation endpoint supports both plan and bill intents.
+- The localhost smoke test returned `201 grounded`, `uncertain: false`, the exact reconciled bill,
+  and one `bill_snapshot` reference after migration `20260826_03` reached head.
+- Independent human verification reproduced the exact July bill, grounded status, false uncertainty,
+  and typed bill evidence, completing the latest-bill development checkpoint.

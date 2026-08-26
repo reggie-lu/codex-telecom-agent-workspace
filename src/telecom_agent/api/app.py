@@ -25,12 +25,13 @@ from telecom_agent.ports.health import DatabaseHealth
 from telecom_agent.ports.messages import (
     CurrentPlanAnswerGenerator,
     CurrentPlanProvider,
+    LatestBillProvider,
     MessageExchangeRepository,
 )
 from telecom_agent.services.create_conversation import CreateConversationService
-from telecom_agent.services.send_current_plan_message import (
+from telecom_agent.services.send_support_message import (
     ConversationNotFoundError,
-    SendCurrentPlanMessageService,
+    SendSupportMessageService,
 )
 
 
@@ -42,14 +43,16 @@ def create_app(
     current_plans: CurrentPlanProvider,
     answer_generator: CurrentPlanAnswerGenerator,
     exchanges: MessageExchangeRepository,
+    latest_bills: LatestBillProvider | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Telecom Customer-Service Agent", lifespan=lifespan)
     authenticate = build_customer_authentication(customer_identities)
     create_conversation = CreateConversationService(repository=conversations)
-    send_message = SendCurrentPlanMessageService(
+    send_message = SendSupportMessageService(
         conversations=conversations,
         current_plans=current_plans,
+        latest_bills=latest_bills,
         answer_generator=answer_generator,
         exchanges=exchanges,
     )

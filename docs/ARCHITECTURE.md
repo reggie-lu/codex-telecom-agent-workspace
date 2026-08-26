@@ -49,6 +49,16 @@ Approved grounded current-plan message contract:
 - Missing and cross-customer conversations share `404 conversation_not_found`; invalid content uses
   stable `422 invalid_message`.
 
+Approved latest-bill message contract:
+
+- The same authenticated message endpoint recognizes direct latest-bill summary requests.
+- A grounded response includes the billing period, reconciled total, every ordered line item, and
+  one typed `bill_snapshot` evidence reference.
+- The first slice uses deterministic wording and does not call MiniMax-M3.
+- Missing, empty, invalid-period, negative, or non-reconciling billing data returns a safe persisted
+  unavailable exchange without amounts or evidence.
+- Unexpected-charge questions remain unsupported until their separately evaluated slice.
+
 ## 3. Technology Stack
 
 - Python 3.12+; local environment currently uses Python 3.13.5.
@@ -93,6 +103,7 @@ retrieved plan and bill data are persisted as snapshots. Raw bearer tokens are n
 - `PlanSnapshot`: UUID, customer, plan code/name, allowances, recurring charges, effective and
   retrieval dates, source version, freshness/availability.
 - `Bill`: UUID, customer, period, total, currency, retrieval time, source version, freshness/status.
+- `BillLineItemSnapshot`: UUID, bill snapshot, stable code, description, decimal amount, and order.
 - `Charge`: UUID, bill, description, decimal amount, date, category, supporting details.
 - `Conversation`: UUID, customer, status, timestamps.
 - `Message`: UUID, conversation, role, Unicode content, UTC timestamp, typed evidence references,
@@ -161,7 +172,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (current-plan intent-quality remediation implemented locally)
+Last updated: 2026-08-26 (focused latest-bill summary implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -194,6 +205,11 @@ flowchart TB
     Support -->|unsupported or unavailable| DB
     Support -.-> Escalation[Mock human escalation]
 
+    Intent --> BillSupport[Latest-bill summary]
+    BillSupport --> BillData[Synthetic KDDI bill and line items]
+    BillSupport --> BillEvidence[Typed bill snapshot evidence]
+    BillEvidence --> DB
+
     Dataset[Versioned current-plan eval dataset] --> Eval[Deterministic grader and gates]
     Eval --> Support
     Eval -. opt-in live cases .-> Model
@@ -207,6 +223,7 @@ flowchart TB
 
     class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Intent,Support,KDDI,Guard,Model,DB,Local implemented
     class Escalation agreed
+    class BillSupport,BillData,BillEvidence implemented
     class Dataset,Eval implemented
     class Docker,K8s deferred
 ```
@@ -260,10 +277,23 @@ evals/cases/current_plan.jsonl
   -> exit 0 only when both gates pass
 ```
 
+Current latest-bill flow:
+
+```text
+POST /v1/conversations/{id}/messages
+  -> authenticate customer and verify conversation ownership
+  -> classify a direct latest-bill summary request
+  -> retrieve the typed Synthetic KDDI bill and ordered line items
+  -> reject missing, empty, invalid-period, negative, or non-reconciling data
+  -> deterministically format only the approved billing facts
+  -> atomically persist messages, bill snapshot, line items, and typed evidence
+  -> 201 grounded or unavailable exchange
+```
+
 ## 13. Open Architecture Questions
 
 - Exact schemas, errors, status codes, and idempotency for endpoints after message submission.
-- Exact tables and constraints for bills, charges, and escalations.
+- Exact tables and constraints for unexpected-charge investigation and escalations.
 - Conversation lifecycle beyond creation and escalation.
 - Evaluation datasets and scorers beyond current-plan support, including escalation success.
 - All production KDDI identity, API, compliance, deployment, and operations concerns.

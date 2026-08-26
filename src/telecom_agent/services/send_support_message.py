@@ -5,6 +5,11 @@ from decimal import Decimal
 from re import findall
 from uuid import UUID, uuid4
 
+from telecom_agent.domain.bills import (
+    BillLineItemSnapshot,
+    BillSnapshot,
+    LatestBillDetails,
+)
 from telecom_agent.domain.messages import (
     AnswerStatus,
     EvidenceReference,
@@ -19,6 +24,7 @@ from telecom_agent.ports.messages import (
     ConversationAccessRepository,
     CurrentPlanAnswerGenerator,
     CurrentPlanProvider,
+    LatestBillProvider,
     MessageExchangeRepository,
 )
 
@@ -27,7 +33,7 @@ class ConversationNotFoundError(Exception):
     pass
 
 
-class SendCurrentPlanMessageService:
+class SendSupportMessageService:
     def __init__(
         self,
         *,
@@ -35,11 +41,13 @@ class SendCurrentPlanMessageService:
         current_plans: CurrentPlanProvider,
         answer_generator: CurrentPlanAnswerGenerator,
         exchanges: MessageExchangeRepository,
+        latest_bills: LatestBillProvider | None = None,
         id_factory: Callable[[], UUID] = uuid4,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._conversations = conversations
         self._current_plans = current_plans
+        self._latest_bills = latest_bills
         self._answer_generator = answer_generator
         self._exchanges = exchanges
         self._id_factory = id_factory
@@ -64,7 +72,14 @@ class SendCurrentPlanMessageService:
             created_at=self._clock(),
         )
 
-        if not _is_current_plan_question(normalized_content):
+        if _is_latest_bill_question(normalized_content):
+            bill = (
+                self._latest_bills.get_latest_bill(customer_id)
+                if self._latest_bills is not None
+                else None
+            )
+            exchange = self._latest_bill_exchange(user_message, customer_id, bill)
+        elif not _is_current_plan_question(normalized_content):
             exchange = self._unsupported_exchange(user_message)
         else:
             plan = self._current_plans.get_current_plan(customer_id)
@@ -87,6 +102,59 @@ class SendCurrentPlanMessageService:
 
         self._exchanges.add(exchange)
         return exchange
+
+    def _latest_bill_exchange(
+        self,
+        user_message: Message,
+        customer_id: UUID,
+        bill: LatestBillDetails | None,
+    ) -> MessageExchange:
+        if bill is None:
+            return self._bill_unavailable_exchange(user_message)
+        if not _is_reconciled_bill(bill):
+            return self._bill_inconsistent_exchange(user_message)
+
+        snapshot = BillSnapshot(
+            id=self._id_factory(),
+            customer_id=customer_id,
+            period_start=bill.period_start,
+            period_end=bill.period_end,
+            total=bill.total,
+            currency=bill.currency,
+            line_items=tuple(
+                BillLineItemSnapshot(
+                    id=self._id_factory(),
+                    code=item.code,
+                    description=item.description,
+                    amount=item.amount,
+                )
+                for item in bill.line_items
+            ),
+            retrieved_at=self._clock(),
+            source_version=bill.source_version,
+        )
+        line_items = "; ".join(
+            f"{item.description} — {_format_money(bill.currency, item.amount)}"
+            for item in bill.line_items
+        )
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                f"Your latest bill covers {_format_bill_period(bill)}. "
+                f"The total is {_format_money(bill.currency, bill.total)}. "
+                f"Line items: {line_items}."
+            ),
+            answer_status=AnswerStatus.GROUNDED,
+            uncertain=False,
+            evidence=(
+                EvidenceReference(type=EvidenceType.BILL_SNAPSHOT, id=snapshot.id),
+            ),
+        )
+        return MessageExchange(
+            user_message=user_message,
+            assistant_message=assistant_message,
+            bill_snapshot=snapshot,
+        )
 
     def _generated_exchange(
         self,
@@ -150,12 +218,36 @@ class SendCurrentPlanMessageService:
         )
         return MessageExchange(user_message, assistant_message, None)
 
+    def _bill_unavailable_exchange(self, user_message: Message) -> MessageExchange:
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                "I can’t confirm your latest bill because the synthetic billing data is "
+                "unavailable. Please try again later or request human support."
+            ),
+            answer_status=AnswerStatus.UNAVAILABLE,
+            uncertain=True,
+        )
+        return MessageExchange(user_message, assistant_message)
+
+    def _bill_inconsistent_exchange(self, user_message: Message) -> MessageExchange:
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                "I can’t confirm your latest bill because the synthetic billing data is "
+                "incomplete or inconsistent. Please request human support."
+            ),
+            answer_status=AnswerStatus.UNAVAILABLE,
+            uncertain=True,
+        )
+        return MessageExchange(user_message, assistant_message)
+
     def _unsupported_exchange(self, user_message: Message) -> MessageExchange:
         assistant_message = self._assistant_message(
             conversation_id=user_message.conversation_id,
             content=(
-                "I can currently explain your current mobile plan. "
-                "Billing, unexpected-charge, and other requests are not implemented yet."
+                "I can currently explain your current mobile plan or summarize your latest bill. "
+                "Unexpected-charge investigation and other requests are not implemented yet."
             ),
             answer_status=AnswerStatus.UNSUPPORTED,
             uncertain=True,
@@ -196,6 +288,40 @@ def _is_current_plan_question(content: str) -> bool:
             "mobile service",
         )
     )
+
+
+def _is_latest_bill_question(content: str) -> bool:
+    normalized = " ".join(findall(r"\w+", content.casefold()))
+    words = set(normalized.split())
+    diagnostic_words = {"why", "higher", "unexpected", "wrong", "incorrect"}
+    return "bill" in words and words.isdisjoint(diagnostic_words)
+
+
+def _is_reconciled_bill(bill: LatestBillDetails) -> bool:
+    return (
+        bill.period_start <= bill.period_end
+        and bill.total >= 0
+        and len(bill.currency) == 3
+        and bool(bill.source_version.strip())
+        and bool(bill.line_items)
+        and all(
+            item.amount >= 0 and bool(item.code.strip()) and bool(item.description.strip())
+            for item in bill.line_items
+        )
+        and sum((item.amount for item in bill.line_items), Decimal()) == bill.total
+    )
+
+
+def _format_bill_period(bill: LatestBillDetails) -> str:
+    start = bill.period_start
+    end = bill.period_end
+    if start.year == end.year and start.month == end.month:
+        return f"{start.strftime('%B')} {start.day}–{end.day}, {end.year}"
+    return f"{_format_date(start)}–{_format_date(end)}"
+
+
+def _format_money(currency: str, amount: Decimal) -> str:
+    return f"{currency} {_format_amount(amount)}"
 
 
 def _format_amount(amount: Decimal) -> str:
