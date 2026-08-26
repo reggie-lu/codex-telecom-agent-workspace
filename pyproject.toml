@@ -1,0 +1,40 @@
+[project]
+name = "telecom-customer-service-agent"
+version = "0.1.0"
+description = "API-first evaluation prototype for grounded KDDI customer support"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic",
+    "fastapi",
+    "openai",
+    "psycopg[binary]",
+    "pydantic",
+    "sqlalchemy",
+    "uvicorn",
+]
+
+[dependency-groups]
+dev = [
+    "httpx",
+    "mypy",
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+addopts = "-ra --import-mode=importlib"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+strict = true

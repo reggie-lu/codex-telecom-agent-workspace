@@ -1,40 +1,19 @@
 # Architecture
 
-> Architecture follows approved product requirements.
-> Codex may recommend options but must ask before making major decisions.
+> Architecture follows approved product requirements. Major changes require human approval.
 
 Architecture review status: APPROVED
 
-## 1. Architecture Drivers
+## 1. Drivers
 
-- The MVP serves actual KDDI customers and only KDDI, so provider-specific behavior is acceptable.
-- The system must access private customer, plan, and billing information through an authorized
-  boundary.
-- Account-specific explanations must be grounded in retrieved data and must expose uncertainty
-  instead of inventing missing facts.
-- Missing, incomplete, conflicting, outdated, or unavailable plan and billing data are mandatory
-  evaluation scenarios.
-- Customers need a conversational English experience for plan, bill, and unexpected-charge
-  questions, including contextual follow-ups.
-- Customers must be able to reach a human representative, with relevant context preserved during
-  handoff.
-- The system supports human judgment rather than replacing it in disputes.
-- Privacy, reliable escalation, and evaluation evidence are more important than broad feature scope
-  in version 0.1.
-- The initial product is informational and escalation-focused; plan comparison, roaming guidance,
-  cost-saving recommendations, voice interaction, and multi-provider support are deferred.
+- KDDI-specific synthetic prototype with private-data boundaries modeled explicitly.
+- Grounded account answers, transparent uncertainty, and release-blocking corner-case evaluation.
+- English conversational follow-ups and contextual human escalation.
+- Privacy, customer isolation, and evaluation evidence over broad feature scope.
 
-Status: CONFIRMED
+## 2. Application and API Shape
 
-## 2. Application Shape
-
-Version 0.1 will be an API-first backend. It will expose the approved telecom customer-service
-capabilities through a backend interface that future web, mobile, or KDDI channel clients can use.
-
-A customer frontend is deferred. The version 0.1 API and its automated tests will provide the
-initial usable and verifiable surface.
-
-### Initial public API
+Version 0.1 is a localhost-only, API-first backend; no frontend is approved.
 
 ```text
 POST /v1/conversations
@@ -44,94 +23,43 @@ POST /v1/conversations/{conversation_id}/escalations
 GET  /v1/escalations/{escalation_id}
 ```
 
-Every endpoint requires a synthetic bearer token and enforces ownership by the authenticated mock
-customer. The API is conversation-centric; direct public plan, bill, and charge endpoints are not
-part of version 0.1. Exact request bodies, response bodies, errors, and status codes will be proposed
-before implementation.
+Every endpoint requires a synthetic bearer token and customer ownership. Direct public plan, bill,
+and charge endpoints are excluded. Exact schemas, errors, status codes, and idempotency are deferred
+to the first feature plan.
 
-Status: CONFIRMED
+Approved conversation-creation contract:
+
+- `POST /v1/conversations` requires `Authorization: Bearer <synthetic-token>` and no request body.
+- Success returns `201 Created` with `id`, `status: "open"`, and a UTC `created_at` timestamp.
+- The response omits customer identity.
+- Missing or invalid credentials return `401 Unauthorized`, `WWW-Authenticate: Bearer`, and an
+  error envelope with code `unauthorized`.
+- Every successful request creates a distinct conversation; idempotency is deferred.
+- `open` is the only approved initial conversation status.
 
 ## 3. Technology Stack
 
-Ask one decision at a time only when the choice matters.
-
-### Language
-
-Use Python for the version 0.1 backend.
-
-Python fits the project's LLM integration, behavioral evaluation, and pytest-based testing needs
-while supporting rapid iteration on the focused API.
-
-Status: CONFIRMED
-
-### Framework
-
-Use FastAPI for the version 0.1 backend.
-
-FastAPI will define typed request and response contracts, generate OpenAPI documentation, and
-support API-level tests. Pydantic will be used only where required by the approved API boundary.
-
-Status: CONFIRMED
-
-### Persistence
-
-Version 0.1 must retain:
-
-- Customer support conversation history.
-- Human-escalation requests and their status.
-- Retrieved customer plan and billing data.
-
-These records contain sensitive customer information. Retention duration, deletion behavior,
-encryption requirements, and access controls still require explicit decisions.
-
-Decision: Use a local PostgreSQL database for version 0.1 development and verification.
-
-Access and migrations: Use synchronous SQLAlchemy 2 for relational persistence, Alembic for schema
-migrations, and Psycopg as the PostgreSQL driver. Async database access is not justified for the
-localhost evaluation prototype.
-
-Production database hosting and operations are deferred until deployment requirements are approved.
-
-Status: CONFIRMED
-
-### Frontend
-
-No frontend will be built for version 0.1. Future clients will consume the approved API.
-
-Status: DEFERRED
-
-### Infrastructure / Deployment
-
-Version 0.1 runs locally. The FastAPI service binds to localhost and uses a local PostgreSQL
-database. No public hosting, cloud resources, containers, or CI/CD infrastructure are approved.
-
-Status: CONFIRMED
+- Python 3.12+; local environment currently uses Python 3.13.5.
+- FastAPI and Pydantic for typed API contracts and OpenAPI.
+- Local PostgreSQL.
+- Synchronous SQLAlchemy 2, Alembic, and Psycopg.
+- `uv` for dependency and lockfile management.
+- No frontend, containers, cloud resources, or CI/CD.
 
 ## 4. System Context
 
-The version 0.1 caller is a local API or evaluation client acting as a synthetic KDDI customer. The
-FastAPI backend authenticates the mock identity, orchestrates support behavior, persists state in
-local PostgreSQL, reads synthetic KDDI account data, calls SambaNova for model generation, and sends
-escalations to a mock human-handoff adapter.
-
-Status: DERIVED FROM CONFIRMED ARCHITECTURE
+A local API or evaluation client acts as a synthetic KDDI customer. FastAPI authenticates the mock
+identity and calls support services. Services use the domain, local PostgreSQL, a synthetic KDDI
+adapter, SambaNova `MiniMax-M3`, and a mock human-escalation adapter.
 
 ## 5. Module Boundaries
 
-- `domain` — conversations, plans, bills, charges, escalations, and business rules for uncertainty
-  and escalation.
-- `services` — orchestrates approved customer-support use cases without depending directly on
-  FastAPI, PostgreSQL, or SambaNova.
-- `ports` — narrow interfaces required by services for customer-data access, persistence, model
-  generation, and human escalation.
-- `adapters` — PostgreSQL persistence, synthetic KDDI data, SambaNova, and deterministic test
-  implementations.
-- `api` — FastAPI routes and schemas, synthetic bearer-token authentication, and transport error
-  translation.
-- Evaluation suite — routine and corner-case datasets, scoring, and opt-in live-model runs outside
-  production request handling.
-
-Status: CONFIRMED
+- `domain`: plans, bills, charges, conversations, escalations, grounding and uncertainty rules.
+- `services`: use-case orchestration independent of frameworks and providers.
+- `ports`: narrow persistence, customer-data, model, and escalation interfaces.
+- `adapters`: PostgreSQL, synthetic KDDI, SambaNova, mock escalation, and deterministic test fakes.
+- `api`: FastAPI transport, schemas, mock authentication, and error translation.
+- Evaluation suite: datasets and scoring outside production request handling.
 
 ## 6. Dependency Direction
 
@@ -141,280 +69,103 @@ adapters -> ports <- services
 evaluation -> api/services through public boundaries
 ```
 
-The domain does not import FastAPI, PostgreSQL, SambaNova, or concrete adapters. Services depend on
-narrow ports; adapters implement those ports. Tests replace external boundaries rather than mocking
-internal implementation details.
+Domain code must not import FastAPI, PostgreSQL, SambaNova, or concrete adapters. Tests replace
+external boundaries, not internal implementation details.
 
-Status: CONFIRMED
+## 7. Persistent Data Model
 
-## 7. Data Model
+All approved entities are stored in PostgreSQL. Synthetic KDDI fixtures are the external source;
+retrieved plan and bill data are persisted as snapshots. Raw bearer tokens are never stored.
 
-All approved persistent entities will be stored in PostgreSQL. Synthetic KDDI fixtures act as the
-external source; plan and billing data retrieved from that source are persisted as snapshots. Raw
-bearer tokens must not be stored.
+- `SyntheticCustomer`: UUID, display name, synthetic auth subject or token hash.
+- `PlanSnapshot`: UUID, customer, plan code/name, allowances, recurring charges, effective and
+  retrieval dates, source version, freshness/availability.
+- `Bill`: UUID, customer, period, total, currency, retrieval time, source version, freshness/status.
+- `Charge`: UUID, bill, description, decimal amount, date, category, supporting details.
+- `Conversation`: UUID, customer, status, timestamps.
+- `Message`: UUID, conversation, role, Unicode content, UTC timestamp, typed evidence references,
+  uncertainty indicator.
+- `Escalation`: UUID, customer, conversation, reason, status, timestamps, handoff context.
 
-### SyntheticCustomer
+Core types: UUID identifiers; Python decimal and PostgreSQL `NUMERIC` for money; constrained
+three-letter currency (synthetic default `JPY`); dates for calendar values; timezone-aware UTC
+timestamps; enums or constraints for statuses and roles; typed evidence references.
 
-Purpose: Mock account identity and authorization scope.
-
-Important fields: Customer ID, display name, synthetic authentication subject or token hash.
-
-Relationships: Owns conversations, plan snapshots, bills, and escalations.
-
-Lifecycle: Seeded for the prototype and retained until explicit development reset.
-
-Sensitive data: Synthetic identity data only.
-
-### PlanSnapshot
-
-Purpose: Represent a customer's plan as retrieved at a point in time.
-
-Important fields: Snapshot ID, customer ID, plan code and name, allowances, recurring charges,
-effective date, retrieval time, source version, freshness or availability status.
-
-Relationships: Belongs to one customer; may be referenced as evidence by messages.
-
-Lifecycle: Append a snapshot when retrieved data changes or a scenario requires a distinct version.
-
-Sensitive data: Synthetic account-plan data.
-
-### Bill
-
-Purpose: Represent one customer billing period.
-
-Important fields: Bill ID, customer ID, period start and end, total, currency, retrieval time, source
-version, freshness or availability status.
-
-Relationships: Belongs to one customer and contains charges; may be referenced as evidence.
-
-Lifecycle: Seeded or retrieved, then retained until explicit development reset.
-
-Sensitive data: Synthetic billing data.
-
-### Charge
-
-Purpose: Represent and explain an individual bill line item.
-
-Important fields: Charge ID, bill ID, description, amount, date, category, supporting details.
-
-Relationships: Belongs to one bill.
-
-Lifecycle: Follows its bill.
-
-Sensitive data: Synthetic charge data.
-
-### Conversation and Message
-
-Purpose: Retain customer questions, agent answers, follow-ups, evidence references, and uncertainty.
-
-Important fields: Conversation ID, customer ID, status, timestamps; message ID, role, content,
-timestamp, evidence references, uncertainty indicator.
-
-Relationships: A customer owns conversations; a conversation contains ordered messages and may have
-an escalation.
-
-Lifecycle: Created during support and retained until explicit development reset.
-
-Sensitive data: Conversation content and references to synthetic account data.
-
-### Escalation
-
-Purpose: Track a requested human handoff.
-
-Important fields: Escalation ID, customer ID, conversation ID, reason, status, creation and update
-times, prepared handoff context.
-
-Relationships: Belongs to one customer and conversation.
-
-Lifecycle: Created on request or when human judgment is required; moves through approved statuses.
-
-Approved statuses:
+Escalation lifecycle:
 
 ```text
 requested -> queued -> assigned -> resolved
                    \-> failed
 ```
 
-- `requested`: Customer or agent initiated the escalation.
-- `queued`: The mock escalation service accepted it for handling.
-- `assigned`: A mock human representative has taken the case.
-- `resolved`: Human handling is recorded as complete.
-- `failed`: Handoff could not be created or continued; a safe next step must be available.
-
 Cancellation and reopening are deferred.
-
-Sensitive data: Conversation and synthetic billing context included in the handoff.
-
-### Proposed core types
-
-- Identifiers: UUID.
-- Monetary amounts: fixed-precision decimal in Python and PostgreSQL `NUMERIC`, never binary float.
-- Currency: constrained three-letter code; synthetic KDDI data defaults to `JPY`.
-- Calendar values: `date` for billing periods and charge dates.
-- Event times: timezone-aware UTC timestamps.
-- Status, role, category, freshness, and uncertainty: explicit enums or constrained values.
-- Human-readable content: Unicode text.
-- Evidence references: typed references to plan snapshots, bills, or charges, not unstructured model
-  claims.
-
-Exact PostgreSQL tables, constraints, indexes, enum strategy, and migration details will be proposed
-before implementation.
-
-Status: CONFIRMED
 
 ## 8. External Integrations
 
-### Proposed KDDI data boundary
+### Synthetic KDDI Adapter
 
-Provider: Local mock KDDI adapter for version 0.1
+Provides deterministic customer, plan, bill, charge, and escalation scenarios. It must simulate
+missing, incomplete, conflicting, outdated, and unavailable data. Dynamic KDDI website retrieval is
+not approved; public pages cannot provide account-specific data.
 
-Purpose: Supply deterministic customer identity, current-plan, bill, charge, and escalation scenarios
-for API development and evaluation.
+### SambaNova Model Adapter
 
-Data read: Synthetic customer, plan, billing, and charge records.
+- OpenAI-compatible chat-completions endpoint.
+- Initial model: `MiniMax-M3`.
+- OpenAI Python SDK with custom base URL and SDK `max_retries=0`.
+- Runtime variables: `SAMBANOVA_BASE_URL`, `SAMBANOVA_MODEL`, `SAMBANOVA_API_KEY`.
+- Finite timeout; exact value deferred.
+- One adapter-controlled retry for transient timeout, rate-limit, or server failures only.
+- No retry for invalid requests or authentication failure; no fallback model.
+- Terminal failure returns a safe unavailable response, preserves the message, and allows retry or
+  mock escalation.
 
-Data written: Synthetic escalation requests and status updates.
+## 9. Security, Privacy, and Retention
 
-Authentication: Test identities only; production customer authentication is not simulated as real
-KDDI authentication.
+- Synthetic bearer tokens map to mock customer identities; every customer query is scoped.
+- One customer cannot access another's conversations, plan, bill, charges, or escalations.
+- Only synthetic data is allowed in version 0.1.
+- Secrets come from runtime configuration and are never committed or logged.
+- Logs and errors exclude tokens and unnecessary customer data.
+- Records survive restart and remain until an explicit development reset; startup never resets data.
+- Production KDDI identity, consent, encryption, retention, and deletion are deferred.
 
-Failure behavior: The adapter must simulate missing, incomplete, conflicting, outdated, and
-unavailable data for mandatory corner-case evaluation.
+## 10. Testing and Evaluation
 
-Public KDDI website information, if later used, may provide general plan descriptions only. It must
-not be treated as customer-specific account or billing data. Dynamic website retrieval, freshness,
-terms of use, and attribution require separate approval before implementation.
+- pytest unit tests for domain, grounding, uncertainty, and escalation rules.
+- FastAPI tests for validation, authentication, ownership, and response contracts.
+- PostgreSQL integration tests for persistence and escalation transitions.
+- Contract tests for KDDI and SambaNova adapter boundaries.
+- Deterministic fake model in ordinary tests.
+- Separate opt-in SambaNova evaluation suite for routine and corner cases.
+- Routine target: at least 80%.
+- Mandatory safety groups: 100% safe handling of missing/unavailable and conflicting/outdated data;
+  any violation blocks release.
 
-Status: CONFIRMED
+## 11. Runtime and Deployment
 
-### LLM integration
+FastAPI and PostgreSQL run locally; the API binds to localhost. Remote or public deployment requires
+new authentication, security, infrastructure, and operational approval.
 
-Provider: SambaNova endpoint
-
-Protocol: OpenAI-compatible chat-completions API
-
-Initial model: `MiniMax-M3`
-
-Purpose: Generate grounded conversational explanations and follow-up responses for the telecom
-customer-service agent.
-
-Proposed boundary: A small internal model interface with one SambaNova implementation and a
-deterministic fake used by automated tests.
-
-Secrets: Endpoint credentials must be supplied through approved runtime secret configuration and
-must never be committed to the repository or stored in project documentation.
-
-Runtime configuration:
-
-- `SAMBANOVA_BASE_URL`
-- `SAMBANOVA_MODEL` with version 0.1 default `MiniMax-M3`
-- `SAMBANOVA_API_KEY`
-
-Client: Use the OpenAI Python SDK with the SambaNova base URL. Configure the SDK with
-`max_retries=0` so the adapter's approved single transient retry is the only retry policy.
-
-Failure behavior:
-
-- Apply a finite request timeout; choose the exact value during implementation planning.
-- Retry once only for transient timeouts, rate limits, or server failures.
-- Do not retry invalid requests or authentication failures.
-- Do not use an unapproved fallback model.
-- After terminal failure, return a safe service-unavailable response without generating an
-  unsupported explanation.
-- Preserve the customer's message so the customer can retry or request mock human escalation.
-
-Status: CONFIRMED
-
-## 9. Security / Privacy
-
-Version 0.1 uses synthetic bearer tokens mapped to mock customer identities.
-
-Requirements:
-
-- Every customer-scoped request must derive its mock identity from the bearer token.
-- A mock customer must never access another customer's conversations, plan, bill, charges, or
-  escalation records.
-- Tokens are development credentials and must not be represented as real KDDI authentication.
-- Only synthetic customer and billing data may be stored in the prototype.
-- SambaNova and database credentials must come from runtime secret configuration and must not be
-  committed or logged.
-- Logs and error responses must not expose bearer tokens or unnecessary customer data.
-- Production KDDI authentication, authorization, and consent remain deferred until official access
-  is available.
-- Synthetic conversations, billing snapshots, and escalation records are retained until an explicit
-  development reset.
-- The reset operation must deliberately clear prototype records and restore the approved synthetic
-  seed state; it must not run implicitly during ordinary application startup.
-- A real-customer retention and deletion policy remains deferred until KDDI legal, privacy, and
-  operational requirements are available.
-
-Status: CONFIRMED FOR THE SYNTHETIC LOCAL PROTOTYPE
-
-## 10. Testing Architecture
-
-- Use pytest as the test runner.
-- Unit-test domain rules, grounding decisions, uncertainty behavior, and escalation behavior.
-- Test FastAPI request validation, synthetic-token authorization, customer isolation, and response
-  contracts at the API boundary.
-- Integration-test PostgreSQL persistence for conversations, billing snapshots, and escalation
-  status transitions.
-- Contract-test the local mock KDDI adapter and SambaNova adapter boundary.
-- Use the deterministic fake model in the normal automated test suite.
-- Keep live SambaNova evaluations in a separate opt-in suite because they are nondeterministic,
-  slower, and may incur cost.
-- Evaluate routine cases against the approved aggregate 80% target.
-- Evaluate missing or unavailable data and conflicting or outdated data as separate mandatory
-  corner-case groups.
-- Require 100% safe behavior in both mandatory corner-case groups: no invented account facts for
-  missing data, and explicit conflict or staleness handling for conflicting or outdated data.
-- Treat any safety-gate violation as release-blocking regardless of the aggregate routine-case score.
-- Mock external boundaries, not internal implementation details.
-
-Status: CONFIRMED
-
-## 11. Runtime / Deployment
-
-Run the FastAPI backend and PostgreSQL locally. Bind the API to localhost by default so other
-machines cannot call it directly.
-
-Public or local-network deployment is deferred until an appropriate authentication, security, and
-operational review is approved.
-
-Status: CONFIRMED
-
-## 12. Architecture Diagram
+## 12. Diagram
 
 ```mermaid
 flowchart LR
-    Client[Local API or evaluation client]
-    API[FastAPI API]
-    Services[Support services]
-    Domain[Support domain]
-    Auth[Synthetic token auth]
-    DB[(Local PostgreSQL)]
-    KDDI[Synthetic KDDI adapter]
-    Model[SambaNova MiniMax-M3]
-    Escalation[Mock human escalation]
-
-    Client --> API
-    API --> Auth
-    API --> Services
-    Services --> Domain
-    Services --> DB
-    Services --> KDDI
-    Services --> Model
-    Services --> Escalation
+    Client[Local API or evaluation client] --> API[FastAPI]
+    API --> Auth[Synthetic auth]
+    API --> Services[Support services]
+    Services --> Domain[Domain]
+    Services --> DB[(Local PostgreSQL)]
+    Services --> KDDI[Synthetic KDDI]
+    Services --> Model[SambaNova MiniMax-M3]
+    Services --> Escalation[Mock human escalation]
 ```
-
-Status: DERIVED FROM CONFIRMED ARCHITECTURE
 
 ## 13. Open Architecture Questions
 
-- Exact API request and response schemas, error envelope, HTTP status codes, and idempotency keys.
-- Exact PostgreSQL tables, constraints, indexes, enum representation, and initial migration.
-- Conversation status lifecycle beyond creation and escalation.
-- Exact SambaNova timeout value and local base URL configuration.
-- Measurable escalation-success target beyond state transitions and context preservation.
-- Evaluation dataset size, case balance, and scoring implementation.
-- Production KDDI authentication, account APIs, consent, retention, encryption, deployment, and
-  operations. These are explicitly outside version 0.1.
+- Exact API schemas, errors, status codes, and idempotency.
+- Exact tables, constraints, indexes, enum representation, and initial migration.
+- Conversation lifecycle beyond creation and escalation.
+- Exact model timeout and local endpoint configuration.
+- Escalation-success metric and evaluation dataset/scorer implementation.
+- All production KDDI identity, API, compliance, deployment, and operations concerns.
