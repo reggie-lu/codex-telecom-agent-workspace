@@ -165,3 +165,4 @@ Never commit `.env` or real credentials.
 - `docs/PRODUCT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DECISIONS.md`
+- `docs/FEATURE_HISTORY.md`

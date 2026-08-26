@@ -147,24 +147,58 @@ not approved; public pages cannot provide account-specific data.
 FastAPI and PostgreSQL run locally; the API binds to localhost. Remote or public deployment requires
 new authentication, security, infrastructure, and operational approval.
 
-## 12. Diagram
+## 12. Agreed Feature Flow
+
+Last updated: 2026-08-26 14:13 JST
+
+The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
+approved for version 0.1 but not implemented, and gray nodes are deferred and require later
+approval before implementation.
 
 ```mermaid
-flowchart LR
-    Client[Local API or evaluation client] --> API[FastAPI]
-    API --> Auth[Synthetic auth]
-    API --> Services[Support services]
-    Services --> Domain[Domain]
-    Services --> DB[(Local PostgreSQL)]
-    Services --> KDDI[Synthetic KDDI]
-    Services --> Model[SambaNova MiniMax-M3]
-    Services --> Escalation[Mock human escalation]
+flowchart TB
+    Client[Local API or evaluation client] --> API[FastAPI API]
+    API --> Auth[Synthetic bearer authentication]
+
+    Auth --> Create[Create conversation]
+    Create --> ConversationService[Create-conversation service]
+    ConversationService --> ConversationRepo[Conversation repository]
+    ConversationRepo --> DB[(Local PostgreSQL)]
+
+    Auth -. approved next flow .-> Message[Send support message]
+    Message -.-> Support[Grounded support orchestration]
+    Support -.-> KDDI[Synthetic KDDI plan and billing data]
+    Support -.-> Model[SambaNova MiniMax-M3]
+    Support -.-> DB
+    Support -.-> Escalation[Mock human escalation]
+
+    Local[Localhost runtime] -. future approval .-> Docker[Docker packaging]
+    Docker -. future approval .-> K8s[Kubernetes deployment]
+
+    classDef implemented fill:#d7f5df,stroke:#238636,color:#111
+    classDef agreed fill:#dbeafe,stroke:#2563eb,color:#111
+    classDef deferred fill:#eeeeee,stroke:#777,color:#333,stroke-dasharray:5 5
+
+    class Client,API,Auth,Create,ConversationService,ConversationRepo,DB,Local implemented
+    class Message,Support,KDDI,Model,Escalation agreed
+    class Docker,K8s deferred
+```
+
+Current implemented request flow:
+
+```text
+POST /v1/conversations
+  -> synthetic bearer authentication
+  -> create-conversation service
+  -> SQLAlchemy conversation repository
+  -> local PostgreSQL
+  -> 201 Created
 ```
 
 ## 13. Open Architecture Questions
 
-- Exact API schemas, errors, status codes, and idempotency.
-- Exact tables, constraints, indexes, enum representation, and initial migration.
+- Exact schemas, errors, status codes, and idempotency for endpoints after conversation creation.
+- Exact tables and constraints for messages, snapshots, bills, charges, and escalations.
 - Conversation lifecycle beyond creation and escalation.
 - Exact model timeout and local endpoint configuration.
 - Escalation-success metric and evaluation dataset/scorer implementation.
