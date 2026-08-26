@@ -4,9 +4,16 @@ from io import StringIO
 from fastapi import FastAPI
 
 from telecom_agent.adapters.postgres.seeding import SeedResult
+from telecom_agent.adapters.sambanova.current_plan_answers import SambaNovaSettings
 from telecom_agent.cli import run_cli
 
 DATABASE_URL = "postgresql+psycopg://local/test"
+SERVE_ENVIRONMENT = {
+    "DATABASE_URL": DATABASE_URL,
+    "SAMBANOVA_BASE_URL": "https://api.sambanova.ai/v1",
+    "SAMBANOVA_MODEL": "MiniMax-M3",
+    "SAMBANOVA_API_KEY": "test-key",
+}
 
 
 def test_seed_requires_database_url() -> None:
@@ -60,11 +67,14 @@ def test_seed_reports_existing_customer_when_repeated() -> None:
 
 def test_serve_composes_database_app_and_binds_only_to_localhost() -> None:
     expected_app = FastAPI()
-    composed_urls: list[str] = []
+    compositions: list[tuple[str, SambaNovaSettings]] = []
     server_calls: list[tuple[FastAPI, str, int]] = []
 
-    def app_factory(database_url: str) -> FastAPI:
-        composed_urls.append(database_url)
+    def app_factory(
+        database_url: str,
+        sambanova_settings: SambaNovaSettings,
+    ) -> FastAPI:
+        compositions.append((database_url, sambanova_settings))
         return expected_app
 
     def server_runner(app: FastAPI, *, host: str, port: int) -> None:
@@ -72,14 +82,38 @@ def test_serve_composes_database_app_and_binds_only_to_localhost() -> None:
 
     exit_code = run_cli(
         ["serve"],
-        environ={"DATABASE_URL": DATABASE_URL},
+        environ=SERVE_ENVIRONMENT,
         app_factory=app_factory,
         server_runner=server_runner,
     )
 
     assert exit_code == 0
-    assert composed_urls == [DATABASE_URL]
+    assert compositions == [
+        (
+            DATABASE_URL,
+            SambaNovaSettings(
+                base_url="https://api.sambanova.ai/v1",
+                model="MiniMax-M3",
+                api_key="test-key",
+            ),
+        )
+    ]
     assert server_calls == [(expected_app, "127.0.0.1", 8000)]
+
+
+def test_serve_reports_missing_sambanova_settings_without_exposing_values() -> None:
+    stderr = StringIO()
+
+    exit_code = run_cli(
+        ["serve"],
+        environ={"DATABASE_URL": DATABASE_URL, "SAMBANOVA_MODEL": "MiniMax-M3"},
+        stderr=stderr,
+    )
+
+    assert exit_code == 2
+    assert stderr.getvalue() == (
+        "The serve command requires: SAMBANOVA_BASE_URL, SAMBANOVA_API_KEY.\n"
+    )
 
 
 def test_cli_uses_only_the_supplied_environment_mapping() -> None:

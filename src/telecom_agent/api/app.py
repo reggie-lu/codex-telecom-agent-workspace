@@ -22,7 +22,11 @@ from telecom_agent.ports.conversations import (
     CustomerIdentityRepository,
 )
 from telecom_agent.ports.health import DatabaseHealth
-from telecom_agent.ports.messages import CurrentPlanProvider, MessageExchangeRepository
+from telecom_agent.ports.messages import (
+    CurrentPlanAnswerGenerator,
+    CurrentPlanProvider,
+    MessageExchangeRepository,
+)
 from telecom_agent.services.create_conversation import CreateConversationService
 from telecom_agent.services.send_current_plan_message import (
     ConversationNotFoundError,
@@ -36,6 +40,7 @@ def create_app(
     conversations: ConversationStore,
     database_health: DatabaseHealth,
     current_plans: CurrentPlanProvider,
+    answer_generator: CurrentPlanAnswerGenerator,
     exchanges: MessageExchangeRepository,
     lifespan: Lifespan[FastAPI] | None = None,
 ) -> FastAPI:
@@ -45,6 +50,7 @@ def create_app(
     send_message = SendCurrentPlanMessageService(
         conversations=conversations,
         current_plans=current_plans,
+        answer_generator=answer_generator,
         exchanges=exchanges,
     )
 

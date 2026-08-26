@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
 from telecom_agent.domain.conversations import Conversation
+from tests.fakes import DeterministicAnswerGenerator
 
 
 class UnusedCustomerIdentities:
@@ -59,6 +60,7 @@ def test_health_reports_only_approved_database_status(
         conversations=UnusedConversations(),
         database_health=StubDatabaseHealth(healthy),
         current_plans=UnusedCurrentPlans(),
+        answer_generator=DeterministicAnswerGenerator(),
         exchanges=UnusedExchanges(),
     )
 
@@ -75,6 +77,7 @@ def test_health_openapi_documents_unavailable_response() -> None:
         conversations=UnusedConversations(),
         database_health=StubDatabaseHealth(True),
         current_plans=UnusedCurrentPlans(),
+        answer_generator=DeterministicAnswerGenerator(),
         exchanges=UnusedExchanges(),
     )
 

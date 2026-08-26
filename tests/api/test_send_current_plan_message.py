@@ -10,6 +10,7 @@ from telecom_agent.api.app import create_app
 from telecom_agent.domain.conversations import Conversation
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails
+from tests.fakes import DeterministicAnswerGenerator
 
 VALID_TOKEN = "synthetic-alice-token"
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -79,6 +80,7 @@ def build_client(
         conversations=StubConversations(owned),
         database_health=HealthyDatabase(),
         current_plans=StubCurrentPlans(plan_available),
+        answer_generator=DeterministicAnswerGenerator(),
         exchanges=exchanges,
     )
     return TestClient(app), exchanges

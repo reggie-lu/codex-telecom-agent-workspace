@@ -13,12 +13,21 @@ from telecom_agent.adapters.postgres.seeding import (
     SeedResult,
     seed_synthetic_customer,
 )
+from telecom_agent.adapters.sambanova.current_plan_answers import SambaNovaSettings
 from telecom_agent.api.composition import create_postgres_app
 from telecom_agent.development import DEVELOPMENT_CUSTOMER
 
 
 class ServerRunner(Protocol):
     def __call__(self, app: FastAPI, *, host: str, port: int) -> None: ...
+
+
+class ApplicationFactory(Protocol):
+    def __call__(
+        self,
+        database_url: str,
+        sambanova_settings: SambaNovaSettings,
+    ) -> FastAPI: ...
 
 
 def seed_development_customer(database_url: str) -> SeedResult:
@@ -35,7 +44,7 @@ def run_cli(
     *,
     environ: Mapping[str, str] = os.environ,
     seed_customer: Callable[[str], SeedResult] = seed_development_customer,
-    app_factory: Callable[[str], FastAPI] = create_postgres_app,
+    app_factory: ApplicationFactory = create_postgres_app,
     server_runner: ServerRunner = uvicorn.run,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
@@ -74,7 +83,27 @@ def run_cli(
         )
         return 0
 
-    app = app_factory(database_url)
+    required_model_settings = (
+        "SAMBANOVA_BASE_URL",
+        "SAMBANOVA_MODEL",
+        "SAMBANOVA_API_KEY",
+    )
+    missing_model_settings = [
+        name for name in required_model_settings if not environ.get(name)
+    ]
+    if missing_model_settings:
+        print(
+            "The serve command requires: " + ", ".join(missing_model_settings) + ".",
+            file=error_output,
+        )
+        return 2
+
+    sambanova_settings = SambaNovaSettings(
+        base_url=environ["SAMBANOVA_BASE_URL"],
+        model=environ["SAMBANOVA_MODEL"],
+        api_key=environ["SAMBANOVA_API_KEY"],
+    )
+    app = app_factory(database_url, sambanova_settings)
     server_runner(app, host="127.0.0.1", port=8000)
     return 0
 

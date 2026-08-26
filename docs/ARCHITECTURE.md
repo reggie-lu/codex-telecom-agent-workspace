@@ -126,7 +126,7 @@ not approved; public pages cannot provide account-specific data.
 - Initial model: `MiniMax-M3`.
 - OpenAI Python SDK with custom base URL and SDK `max_retries=0`.
 - Runtime variables: `SAMBANOVA_BASE_URL`, `SAMBANOVA_MODEL`, `SAMBANOVA_API_KEY`.
-- Finite timeout; exact value deferred.
+- 30-second timeout per attempt.
 - One adapter-controlled retry for transient timeout, rate-limit, or server failures only.
 - No retry for invalid requests or authentication failure; no fallback model.
 - Terminal failure returns a safe unavailable response, preserves the message, and allows retry or
@@ -161,7 +161,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 14:59 JST
+Last updated: 2026-08-26 (SambaNova grounded-generation slice implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -185,10 +185,12 @@ flowchart TB
     ConversationRepo --> DB[(Local PostgreSQL)]
 
     Auth --> Message[Send support message]
-    Message --> Support[Deterministic grounded plan orchestration]
+    Message --> Support[Grounded plan orchestration]
     Support --> KDDI[Synthetic KDDI current-plan data]
-    Support -. approved next boundary .-> Model[SambaNova MiniMax-M3]
-    Support --> DB
+    Support --> Model[SambaNova MiniMax-M3]
+    Model --> Guard[Typed grounding and output guard]
+    Guard --> DB
+    Support -->|unsupported or unavailable| DB
     Support -.-> Escalation[Mock human escalation]
 
     Local[Localhost runtime] -. future approval .-> Docker[Docker packaging]
@@ -198,8 +200,8 @@ flowchart TB
     classDef agreed fill:#dbeafe,stroke:#2563eb,color:#111
     classDef deferred fill:#eeeeee,stroke:#777,color:#333,stroke-dasharray:5 5
 
-    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Support,KDDI,DB,Local implemented
-    class Model,Escalation agreed
+    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Support,KDDI,Guard,Model,DB,Local implemented
+    class Escalation agreed
     class Docker,K8s deferred
 ```
 
@@ -230,16 +232,21 @@ POST /v1/conversations/{id}/messages
   -> authenticate customer and verify conversation ownership
   -> classify current-plan intent deterministically
   -> retrieve typed Synthetic KDDI plan facts
-  -> create plan snapshot and evidence-templated answer
-  -> atomically persist user message, assistant message, snapshot, and evidence
+  -> create a typed plan snapshot and canonical display facts
+  -> MiniMax-M3 generates wording from only the question and canonical facts
+  -> reject blank, incomplete, overlong, or extra-numeric output
+  -> atomically persist the grounded exchange and evidence
   -> 201 grounded, unavailable, or unsupported exchange
 ```
+
+Unsupported intent and missing plan data do not call the model. A terminal provider failure or
+rejected output persists the user message with a safe unavailable assistant message; rejected raw
+output and an unreferenced plan snapshot are not persisted.
 
 ## 13. Open Architecture Questions
 
 - Exact schemas, errors, status codes, and idempotency for endpoints after message submission.
 - Exact tables and constraints for bills, charges, and escalations.
 - Conversation lifecycle beyond creation and escalation.
-- Exact model timeout and local endpoint configuration.
 - Escalation-success metric and evaluation dataset/scorer implementation.
 - All production KDDI identity, API, compliance, deployment, and operations concerns.

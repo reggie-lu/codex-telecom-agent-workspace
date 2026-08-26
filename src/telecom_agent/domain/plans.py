@@ -21,6 +21,16 @@ class CurrentPlanDetails:
 
 
 @dataclass(frozen=True, slots=True)
+class GroundedCurrentPlanFacts:
+    """Canonical display values that a model may use in a current-plan answer."""
+
+    plan_name: str
+    data_allowance: str
+    recurring_charge: str
+    effective_date: str
+
+
+@dataclass(frozen=True, slots=True)
 class PlanSnapshot:
     id: UUID
     customer_id: UUID

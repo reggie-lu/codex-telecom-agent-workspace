@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — grounded current-plan messaging awaiting human verification
+Status: Active implementation — guarded SambaNova current-plan generation awaiting human verification
 
 ## Purpose
 
@@ -51,6 +51,10 @@ set +a
 
 Copying `.env` alone does not load it. Alembic requires `DATABASE_URL` to be exported in the shell.
 The untracked `.env` file may be edited when local credentials or ports differ.
+Set `SAMBANOVA_API_KEY` in `.env` before serving the API. Keep
+`SAMBANOVA_MODEL=MiniMax-M3` to test the approved model; the application never substitutes another
+model. The `serve` command exits with a list of missing variable names, without printing values, if
+any SambaNova setting is empty.
 
 Apply the database schema:
 
@@ -131,9 +135,22 @@ curl -i -X POST \
   --data '{"content":"What is my current plan?"}'
 ```
 
-Expect `HTTP/1.1 201 Created`. The assistant message must have `answer_status: "grounded"`,
-`uncertain: false`, and one `plan_snapshot` evidence reference. Its explanation should contain only
-the synthetic plan facts: 20 GB, JPY 4,500, and an August 1, 2026 effective date.
+Expect `HTTP/1.1 201 Created`. A successful MiniMax-M3 response must have
+`answer_status: "grounded"`, `uncertain: false`, and one `plan_snapshot` evidence reference. Its
+wording may vary, but it must include exactly these canonical values: `Synthetic KDDI 5G 20GB`,
+`20 GB`, `JPY 4,500`, and `August 1, 2026`. This request proves the configured model endpoint was
+used because the production server has no grounded-answer fallback.
+
+If the configured endpoint rejects `MiniMax-M3`, the key is invalid, both provider attempts fail,
+or output fails the grounding guard, expect `201 Created` with `answer_status: "unavailable"`,
+`uncertain: true`, no evidence, and this safe message:
+
+```text
+I can’t generate a grounded answer right now. Please try again later or request human support.
+```
+
+The API intentionally does not expose provider exception details. Check the configured model name
+in the SambaNova account before changing it; do not silently use another model.
 
 Verify safe handling of a question outside the implemented slice:
 
@@ -146,7 +163,7 @@ curl -i -X POST \
 ```
 
 Expect `201 Created` with `answer_status: "unsupported"`, `uncertain: true`, no evidence, and a
-clear statement that billing support is not implemented yet.
+clear statement that billing support is not implemented yet. This path does not call SambaNova.
 
 Verify the authentication failure contract separately:
 
@@ -192,6 +209,22 @@ TEST_DATABASE_URL=postgresql+psycopg://bowenl@127.0.0.1:55432/telecom_agent_test
 ```
 
 Never commit `.env` or real credentials.
+
+## Automated and Live Verification
+
+Ordinary tests use a deterministic fake at the model port and never access SambaNova:
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://bowenl@127.0.0.1:55432/telecom_agent_test \
+  uv run pytest
+uv run ruff check .
+uv run mypy src tests
+```
+
+The current-plan curl request above is the opt-in live smoke test. Run it only after loading `.env`
+and starting `uv run telecom-agent serve`; it uses the configured SambaNova account and may incur
+provider usage. Stop the server with `Ctrl-C` after verification. Never put an API key directly in
+a command or commit it to the repository.
 
 ## Project Documentation
 

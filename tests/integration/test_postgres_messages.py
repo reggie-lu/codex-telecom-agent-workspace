@@ -21,11 +21,18 @@ from telecom_agent.adapters.postgres.repositories import (
     SqlAlchemyConversationRepository,
 )
 from telecom_agent.adapters.postgres.seeding import seed_synthetic_customer
+from telecom_agent.adapters.sambanova.current_plan_answers import SambaNovaSettings
 from telecom_agent.api.composition import create_postgres_app
 from telecom_agent.development import DEVELOPMENT_CUSTOMER
 from telecom_agent.domain.messages import AnswerStatus, MessageRole
+from tests.fakes import DeterministicAnswerGenerator
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+TEST_SAMBANOVA_SETTINGS = SambaNovaSettings(
+    base_url="https://example.invalid/v1",
+    model="MiniMax-M3",
+    api_key="test-key",
+)
 pytestmark = pytest.mark.skipif(
     TEST_DATABASE_URL is None,
     reason="TEST_DATABASE_URL is required for PostgreSQL integration tests",
@@ -134,7 +141,13 @@ def test_postgres_composition_persists_grounded_message_exchange(
 ) -> None:
     assert TEST_DATABASE_URL is not None
     seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
-    client = TestClient(create_postgres_app(TEST_DATABASE_URL))
+    client = TestClient(
+        create_postgres_app(
+            TEST_DATABASE_URL,
+            TEST_SAMBANOVA_SETTINGS,
+            answer_generator=DeterministicAnswerGenerator(),
+        )
+    )
     headers = {"Authorization": f"Bearer {DEVELOPMENT_CUSTOMER.raw_token}"}
     conversation_response = client.post("/v1/conversations", headers=headers)
     conversation_id = UUID(conversation_response.json()["id"])

@@ -21,11 +21,18 @@ from telecom_agent.adapters.postgres.seeding import (
     SeedResult,
     seed_synthetic_customer,
 )
+from telecom_agent.adapters.sambanova.current_plan_answers import SambaNovaSettings
 from telecom_agent.api.composition import create_postgres_app
 from telecom_agent.development import DEVELOPMENT_CUSTOMER
 from telecom_agent.domain.conversations import Conversation, ConversationStatus
+from tests.fakes import DeterministicAnswerGenerator
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+TEST_SAMBANOVA_SETTINGS = SambaNovaSettings(
+    base_url="https://example.invalid/v1",
+    model="MiniMax-M3",
+    api_key="test-key",
+)
 pytestmark = pytest.mark.skipif(
     TEST_DATABASE_URL is None,
     reason="TEST_DATABASE_URL is required for PostgreSQL integration tests",
@@ -134,7 +141,11 @@ def test_conversation_api_persists_to_postgres(
         )
 
     assert TEST_DATABASE_URL is not None
-    app = create_postgres_app(TEST_DATABASE_URL)
+    app = create_postgres_app(
+        TEST_DATABASE_URL,
+        TEST_SAMBANOVA_SETTINGS,
+        answer_generator=DeterministicAnswerGenerator(),
+    )
     response = TestClient(app).post(
         "/v1/conversations",
         headers={"Authorization": f"Bearer {raw_token}"},

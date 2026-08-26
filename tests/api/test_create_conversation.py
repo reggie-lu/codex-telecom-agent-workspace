@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
 from telecom_agent.domain.conversations import Conversation
+from tests.fakes import DeterministicAnswerGenerator
 
 VALID_TOKEN = "synthetic-alice-token"
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -57,6 +58,7 @@ def client(repository: RecordingConversationRepository) -> TestClient:
         conversations=repository,
         database_health=HealthyDatabase(),
         current_plans=UnusedCurrentPlans(),
+        answer_generator=DeterministicAnswerGenerator(),
         exchanges=UnusedExchanges(),
     )
     return TestClient(app)

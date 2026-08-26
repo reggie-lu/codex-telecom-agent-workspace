@@ -12,10 +12,20 @@ from telecom_agent.adapters.postgres.repositories import (
     SqlAlchemyCustomerIdentityRepository,
     SqlAlchemyMessageExchangeRepository,
 )
+from telecom_agent.adapters.sambanova.current_plan_answers import (
+    SambaNovaCurrentPlanAnswerGenerator,
+    SambaNovaSettings,
+)
 from telecom_agent.api.app import create_app
+from telecom_agent.ports.messages import CurrentPlanAnswerGenerator
 
 
-def create_postgres_app(database_url: str) -> FastAPI:
+def create_postgres_app(
+    database_url: str,
+    sambanova_settings: SambaNovaSettings,
+    *,
+    answer_generator: CurrentPlanAnswerGenerator | None = None,
+) -> FastAPI:
     """Compose the API with PostgreSQL-backed adapters."""
     engine = create_engine(database_url)
     session_factory = sessionmaker[Session](engine, expire_on_commit=False)
@@ -32,6 +42,9 @@ def create_postgres_app(database_url: str) -> FastAPI:
         conversations=SqlAlchemyConversationRepository(session_factory),
         database_health=SqlAlchemyDatabaseHealth(engine),
         current_plans=SyntheticKddiCurrentPlanProvider(),
+        answer_generator=(
+            answer_generator or SambaNovaCurrentPlanAnswerGenerator(sambanova_settings)
+        ),
         exchanges=SqlAlchemyMessageExchangeRepository(session_factory),
         lifespan=lifespan,
     )

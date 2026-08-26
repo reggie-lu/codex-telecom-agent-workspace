@@ -166,3 +166,16 @@ evidence-templated explanation. Persist both messages, a typed plan snapshot, ex
 and the evidence link atomically. Missing plan data and unsupported questions return safe persisted
 answers; missing and cross-customer conversations share a privacy-preserving `404`. SambaNova
 generation is deferred to a separately evaluated slice behind this grounding boundary.
+
+## D-023 — Guarded SambaNova wording
+
+Date: 2026-08-26 · Status: Accepted
+
+For supported current-plan questions with available typed data, call `MiniMax-M3` through the
+SambaNova OpenAI-compatible chat-completions endpoint. Send only the customer question and four
+canonical display facts; never send internal identifiers. Use a 30-second timeout per attempt,
+disable SDK retries, and allow one adapter-controlled retry only for timeouts, rate limits, and
+server errors. Accept output only when every canonical value is present, no extra numeric claim is
+introduced, and the text is non-empty and bounded. A terminal or rejected generation produces a
+persisted safe unavailable answer rather than a model or deterministic fallback. Unsupported and
+missing-data answers remain deterministic and do not call the model.
