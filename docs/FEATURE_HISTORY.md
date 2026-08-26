@@ -14,6 +14,7 @@ limitations while the prototype evolves.
 | Current-plan support | Grounded plan messages with typed evidence and safe limitations | Human verified |
 | Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
 | Billing support | Latest-bill and unexpected-charge investigation | Human verified for approved synthetic scenarios |
+| Conversation history | Customer-scoped ordered messages and typed evidence references | Human verified |
 | Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
 | Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; current-plan gates pass |
 | Packaging | Docker development runtime | Deferred; requires approval |
@@ -397,4 +398,55 @@ Known limitations:
 - The agent cannot issue refunds, adjustments, plan changes, or dispute decisions.
 - Customer, bill, and usage evidence are synthetic; real KDDI identity, APIs, compliance, and
   operations remain deferred.
+- Docker, Kubernetes, and public deployment remain deferred.
+
+### CP-009 — Customer-Scoped Conversation History
+
+- Recorded: 2026-08-26 19:49 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `be9cf47b68d3d912205df4cd393d71937fc8e7bc`
+- Commit time: 2026-08-26 19:49:44 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: establishes the trusted conversation read boundary needed to include
+customer questions, agent answers, and supporting evidence in a later human-escalation handoff.
+
+Feature breakdown:
+
+- Authenticated `GET /v1/conversations/{conversation_id}` returns conversation metadata and the
+  complete message history for the owning synthetic customer.
+- Messages are ordered by UTC creation time with UUID as a deterministic tiebreaker.
+- User messages expose their base fields. Assistant messages additionally expose answer status,
+  uncertainty, and typed plan, bill, or charge evidence references.
+- The PostgreSQL adapter bulk-loads the three evidence-link types and reconstructs them without
+  changing message order or embedding snapshot bodies.
+- Missing and cross-customer conversations share `404 conversation_not_found`, with ownership
+  enforced in the read query itself.
+- Empty owned conversations return `200 OK` with `messages: []`. The existing schema is sufficient,
+  so this read-only feature requires no migration.
+
+Verification evidence:
+
+- Codex verification: all 92 pytest tests passed with PostgreSQL integration enabled; Ruff and
+  strict mypy passed.
+- PostgreSQL integration created three exchanges and retrieved six ordered messages with plan,
+  bill, and bill-plus-charge evidence in the expected positions.
+- Existing current-plan regression gate: routine 10/10, safety 6/6, release gate pass in offline
+  mode.
+- Human localhost verification: after restarting the server, retrieval of owned conversation
+  `f384cd7f-9707-4f88-ba3f-2dbe75bb15cb` returned `200 OK`, correct `open` metadata, and
+  `messages: []` on 2026-08-26.
+- Reproduction steps: see `README.md`, section **Manual API Verification**.
+
+Known limitations:
+
+- Version 0.1 returns complete history without pagination, filtering, search, or retention controls.
+- History exposes typed evidence references but not referenced snapshot bodies.
+- Human verification covered the empty-history response; populated histories and every evidence
+  type are covered by the PostgreSQL integration suite.
+- Contextual human-escalation creation and status tracking remain unimplemented.
+- Customer and account data are synthetic; real KDDI identity, APIs, compliance, and operations
+  remain deferred.
 - Docker, Kubernetes, and public deployment remain deferred.
