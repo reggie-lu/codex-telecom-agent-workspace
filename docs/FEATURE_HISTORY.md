@@ -12,6 +12,7 @@ limitations while the prototype evolves.
 | Conversation entry | Authenticate a synthetic customer and create a conversation | Human verified |
 | Local operations | Stable seed, serve, health, and graceful-shutdown workflow | Human verified |
 | Current-plan support | Grounded plan messages with typed evidence and safe limitations | Human verified |
+| Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
 | Billing support | Latest-bill and unexpected-charge investigation | Agreed, not implemented |
 | Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
 | Evaluation | Routine scoring and release-blocking safety cases | Agreed, not implemented |
@@ -145,3 +146,52 @@ Known limitations:
 - Latest-bill, unexpected-charge, escalation, and conversation-history retrieval remain
   unimplemented.
 - Docker, Kubernetes, real KDDI data, and production authentication remain deferred.
+
+### CP-004 — Guarded SambaNova Current-Plan Generation
+
+- Recorded: 2026-08-26 15:36 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `ea8e18aa5ca0e4ca6c25eea30c414beef4086d50`
+- Commit time: 2026-08-26 15:36:24 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: introduces the first live language-model boundary while preserving typed
+account facts, explicit evidence, deterministic missing-data behavior, and bounded failure handling.
+
+Feature breakdown:
+
+- Supported current-plan questions are worded by the configured SambaNova `MiniMax-M3` deployment
+  through the OpenAI-compatible chat-completions API.
+- Only the customer question and four canonical plan display values are sent to the model; internal
+  customer, conversation, message, snapshot, and evidence identifiers are excluded.
+- The OpenAI SDK uses a 30-second timeout and zero SDK retries. The adapter performs at most one
+  retry for timeout, rate-limit, or server failures and never substitutes another model.
+- Generated text is accepted only when it is non-empty, bounded, contains every canonical value,
+  and introduces no additional numeric occurrence.
+- Rejected output or terminal provider failure is discarded and persisted as a safe unavailable
+  exchange. Unsupported and missing-plan requests remain deterministic and model-free.
+- Ordinary tests use an offline deterministic generator; the README documents the explicit live
+  smoke workflow and safe failure result.
+
+Verification evidence:
+
+- Codex verification: 53 pytest tests passed with PostgreSQL integration enabled; Ruff and strict
+  mypy passed across 48 source files.
+- Codex live verification: the configured SambaNova endpoint accepted `MiniMax-M3`; the localhost
+  API returned `201 grounded`, `uncertain: false`, all four canonical values, and one plan-snapshot
+  evidence reference, followed by graceful shutdown.
+- Human verification: the same documented current-plan request returned the approved grounded
+  response and typed evidence on 2026-08-26.
+- Reproduction steps: see `README.md`, sections **Manual API Verification** and **Automated and Live
+  Verification**.
+
+Known limitations:
+
+- MiniMax-M3 currently words only the current-plan explanation; billing, charges, roaming, savings,
+  comparisons, escalation, and conversation-history use remain unimplemented.
+- Customer and plan facts remain synthetic; this is not connected to real KDDI accounts or APIs.
+- The output guard is rule-based and does not replace the planned semantic evaluation suite.
+- Model provenance is configured by the server and is not yet returned as public message metadata.
+- Docker, Kubernetes, production identity, and public deployment remain deferred.
