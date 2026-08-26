@@ -179,3 +179,14 @@ server errors. Accept output only when every canonical value is present, no extr
 introduced, and the text is non-empty and bounded. A terminal or rejected generation produces a
 persisted safe unavailable answer rather than a model or deterministic fallback. Unsupported and
 missing-data answers remain deterministic and do not call the model.
+
+## D-024 — Split deterministic evaluation gates
+
+Date: 2026-08-26 · Status: Accepted
+
+Start evaluation with a versioned 16-case current-plan dataset: 10 routine cases requiring at least
+80% and 6 safety/adversarial cases requiring 100%. Grade explicit application contracts
+deterministically—status, uncertainty, evidence, required facts, and prohibited claims—rather than
+introducing an LLM judge. Keep routine and safety scores separate and block the release gate on any
+safety failure. Ordinary mode is offline; live mode uses the configured `MiniMax-M3` only for
+eligible generation cases and may never weaken deterministic missing-data or output-guard checks.

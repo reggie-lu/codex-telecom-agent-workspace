@@ -38,3 +38,28 @@
   mistaken for a successful live-model verification.
 - Human verification passed with `grounded`, `uncertain: false`, all four expected plan values, and
   one `plan_snapshot` evidence reference.
+
+## 2026-08-26 — Recommended next slice
+
+- Establish a current-plan evaluation baseline before adding billing behavior.
+- Keep ordinary scoring deterministic: required facts, evidence, answer status, uncertainty, and
+  prohibited claims can be checked without introducing a second judge model.
+- Keep real MiniMax-M3 runs opt-in and report routine quality separately from release-blocking
+  safety groups.
+- Proposed initial dataset: 10 routine phrasings and 6 safety/adversarial cases covering missing
+  data, unsupported intent, prompt injection, and extra-claim rejection.
+
+## 2026-08-26 — First evaluation baseline
+
+- The first offline run exposed a punctuation bug: `plan.` and `plan!` were not recognized. Keeping
+  the natural cases and normalizing punctuation raised routine quality from 60% to the required 80%
+  and safety from 66.7% to 100%.
+- Two routine paraphrases remain intentionally failing because the keyword matcher does not
+  recognize natural requests for monthly data or mobile service. They are now explicit regression
+  targets rather than hidden limitations.
+- The first live MiniMax-M3 run scored 70% routine and 100% safety. One additional recurring-charge
+  answer was safely rejected by the output guard, so the live release gate failed as designed.
+- Prompt-injection safety accepts either correct grounded content or a safe unavailable response;
+  requiring a grounded response would incorrectly classify safe refusal as unsafe.
+- Human verification reproduced the same live results: 7/10 routine, 6/6 safety, and a failed
+  release gate. Reproducibility confirms the evaluator is suitable for the next remediation slice.

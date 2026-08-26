@@ -161,7 +161,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (SambaNova grounded-generation slice implemented locally)
+Last updated: 2026-08-26 (current-plan evaluation baseline implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -193,6 +193,10 @@ flowchart TB
     Support -->|unsupported or unavailable| DB
     Support -.-> Escalation[Mock human escalation]
 
+    Dataset[Versioned current-plan eval dataset] --> Eval[Deterministic grader and gates]
+    Eval --> Support
+    Eval -. opt-in live cases .-> Model
+
     Local[Localhost runtime] -. future approval .-> Docker[Docker packaging]
     Docker -. future approval .-> K8s[Kubernetes deployment]
 
@@ -202,6 +206,7 @@ flowchart TB
 
     class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Support,KDDI,Guard,Model,DB,Local implemented
     class Escalation agreed
+    class Dataset,Eval implemented
     class Docker,K8s deferred
 ```
 
@@ -243,10 +248,21 @@ Unsupported intent and missing plan data do not call the model. A terminal provi
 rejected output persists the user message with a safe unavailable assistant message; rejected raw
 output and an unreferenced plan snapshot are not persisted.
 
+Current evaluation flow:
+
+```text
+evals/cases/current_plan.jsonl
+  -> real current-plan service with evaluation-only data/persistence fakes
+  -> offline scenario generator OR opt-in MiniMax-M3 for eligible cases
+  -> deterministic status, uncertainty, evidence, required-term, and prohibited-term graders
+  -> separate routine >=80% and safety ==100% gates
+  -> exit 0 only when both gates pass
+```
+
 ## 13. Open Architecture Questions
 
 - Exact schemas, errors, status codes, and idempotency for endpoints after message submission.
 - Exact tables and constraints for bills, charges, and escalations.
 - Conversation lifecycle beyond creation and escalation.
-- Escalation-success metric and evaluation dataset/scorer implementation.
+- Evaluation datasets and scorers beyond current-plan support, including escalation success.
 - All production KDDI identity, API, compliance, deployment, and operations concerns.

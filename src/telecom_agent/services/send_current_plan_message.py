@@ -184,8 +184,8 @@ class SendCurrentPlanMessageService:
 
 
 def _is_current_plan_question(content: str) -> bool:
-    normalized = " ".join(content.casefold().split())
-    words = set(normalized.replace("?", "").split())
+    normalized = " ".join(findall(r"\w+", content.casefold()))
+    words = set(normalized.split())
     return "plan" in words or any(
         phrase in normalized
         for phrase in ("data allowance", "monthly recurring charge", "mobile package")

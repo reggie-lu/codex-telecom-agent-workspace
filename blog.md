@@ -35,3 +35,19 @@ Manual verification follows the real production composition rather than the offl
 local environment, start the API, create a synthetic conversation, and ask for the current plan. A
 grounded response with all canonical values and snapshot evidence confirms the complete live path.
 The human-run verification produced exactly that result, completing this development slice.
+
+The next useful increment is measurement rather than another feature. A compact current-plan eval
+set can establish a repeatable baseline for routine phrasings and release-blocking safety cases.
+Deterministic graders should own facts, evidence, uncertainty, and prohibited claims; live
+MiniMax-M3 execution remains an explicit opt-in layer rather than a dependency of normal tests.
+
+The baseline immediately paid for itself. Natural punctuation broke the original intent matcher,
+and a small normalization fix moved offline scoring to the approved 80% routine and 100% safety
+gates. Two paraphrase misses remain visible. The first live run then found another case the manual
+happy path did not: a recurring-charge response was safely rejected, leaving live routine quality at
+70% while safety stayed perfect. The gate failed openly, providing the next concrete improvement
+target without weakening the dataset.
+
+The human-run live evaluation reproduced all three failures and the split aggregate scores. That
+agreement between independent runs is the checkpoint: the measurement system works, while the
+product remains correctly blocked from release until routine quality improves.

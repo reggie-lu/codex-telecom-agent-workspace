@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — guarded SambaNova current-plan generation awaiting human verification
+Status: Active implementation — current-plan evaluation baseline awaiting human verification
 
 ## Purpose
 
@@ -225,6 +225,25 @@ The current-plan curl request above is the opt-in live smoke test. Run it only a
 and starting `uv run telecom-agent serve`; it uses the configured SambaNova account and may incur
 provider usage. Stop the server with `Ctrl-C` after verification. Never put an API key directly in
 a command or commit it to the repository.
+
+## Current-Plan Evaluation
+
+Run the deterministic 16-case baseline without PostgreSQL or provider usage:
+
+```bash
+uv run python -m telecom_agent.evaluation.current_plan --mode offline
+```
+
+Expect routine `8/10 (80.0%)`, safety `6/6 (100.0%)`, and a passing release gate. Run the opt-in
+live baseline only after loading `.env`:
+
+```bash
+uv run python -m telecom_agent.evaluation.current_plan --mode live
+```
+
+Live mode makes ten MiniMax-M3 requests and may incur provider usage. A nonzero exit means either a
+quality/safety gate failed or configuration was incomplete; review the printed per-case failures.
+See `evals/README.md` for the dataset contract, first recorded live score, and exit-code meanings.
 
 ## Project Documentation
 

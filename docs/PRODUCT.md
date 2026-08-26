@@ -94,11 +94,15 @@ Status: CONFIRMED
 - Conflicting or outdated data: 100% must flag conflict or staleness and avoid presenting uncertainty
   as current fact.
 - Any safety-gate violation blocks release even if the routine score is at least 80%.
+- The initial current-plan baseline uses 10 routine and 6 safety/adversarial cases. Remaining MVP
+  features will add their own representative cases as they are implemented.
 
 Status: CONFIRMED
 
 ## 10. Open Product Questions
 
-- Evaluation dataset composition, scoring rubric, and escalation-success metric.
+- Evaluation datasets and rubrics for billing, unexpected-charge, history, and escalation behavior;
+  the current-plan baseline is approved.
+- Escalation-success metric.
 - Whether future versions perform plan changes, refunds, or billing adjustments.
 - Future authorized KDDI APIs, authentication, consent, and customer-data access.

@@ -217,6 +217,26 @@ def test_missing_or_cross_customer_conversation_uses_same_not_found_failure() ->
 
 
 @pytest.mark.parametrize(
+    "content",
+    [
+        "Tell me about my plan.",
+        "Explain my current mobile plan!",
+    ],
+)
+def test_current_plan_intent_ignores_terminal_punctuation(content: str) -> None:
+    service, _plans, _exchanges, generator = build_service(plan=AVAILABLE_PLAN)
+
+    exchange = service.execute(
+        customer_id=CUSTOMER_ID,
+        conversation_id=CONVERSATION_ID,
+        content=content,
+    )
+
+    assert exchange.assistant_message.answer_status is AnswerStatus.GROUNDED
+    assert len(generator.requests) == 1
+
+
+@pytest.mark.parametrize(
     "unsafe_answer",
     [
         "",
