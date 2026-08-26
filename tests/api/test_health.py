@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
-from telecom_agent.domain.conversations import Conversation
+from telecom_agent.domain.conversations import Conversation, ConversationHistory
 from tests.fakes import DeterministicAnswerGenerator
 
 
@@ -19,6 +19,13 @@ class UnusedConversations:
 
     def is_owned_by(self, _conversation_id: UUID, _customer_id: UUID) -> bool:
         raise AssertionError("The health endpoint must not access conversations")
+
+    def get_history(
+        self,
+        _conversation_id: UUID,
+        _customer_id: UUID,
+    ) -> ConversationHistory | None:
+        raise AssertionError("The health endpoint must not access conversation history")
 
 
 class UnusedCurrentPlans:

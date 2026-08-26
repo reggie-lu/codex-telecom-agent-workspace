@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
-from telecom_agent.domain.conversations import Conversation
+from telecom_agent.domain.conversations import Conversation, ConversationHistory
 from tests.fakes import DeterministicAnswerGenerator
 
 VALID_TOKEN = "synthetic-alice-token"
@@ -29,6 +29,13 @@ class RecordingConversationRepository:
 
     def is_owned_by(self, _conversation_id: UUID, _customer_id: UUID) -> bool:
         return False
+
+    def get_history(
+        self,
+        _conversation_id: UUID,
+        _customer_id: UUID,
+    ) -> ConversationHistory | None:
+        raise AssertionError("Conversation creation must not retrieve history")
 
 
 class UnusedCurrentPlans:

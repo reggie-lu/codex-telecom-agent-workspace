@@ -226,3 +226,15 @@ Synthetic KDDI Overseas Data Day Pass. Persist both evidence snapshots and links
 must state that the cause is unknown; stale or conflicting evidence must flag that condition and
 omit the causal claim. Recommend human support for unrecognized usage without deciding a dispute,
 issuing a refund, or implementing escalation in this slice.
+
+## D-028 — Complete customer-scoped conversation history
+
+Date: 2026-08-26 · Status: Accepted
+
+Expose authenticated `GET /v1/conversations/{conversation_id}` as the read boundary required by
+later contextual escalation. Return conversation metadata and the complete message history for the
+focused synthetic MVP, ordered by UTC creation time with UUID as a deterministic tiebreaker. User
+messages expose base fields; assistant messages additionally expose status, uncertainty, and typed
+plan, bill, or charge evidence references. Do not embed snapshot bodies and defer pagination.
+Resolve ownership in the repository query and use the same `404 conversation_not_found` response
+for absent and cross-customer conversations.

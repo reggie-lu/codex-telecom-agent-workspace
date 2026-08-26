@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from telecom_agent.domain.conversations import Conversation
+from telecom_agent.domain.conversations import Conversation, ConversationHistory
 from telecom_agent.ports.messages import ConversationAccessRepository
 
 
@@ -9,7 +9,20 @@ class ConversationRepository(Protocol):
     def add(self, conversation: Conversation) -> None: ...
 
 
-class ConversationStore(ConversationRepository, ConversationAccessRepository, Protocol):
+class ConversationHistoryRepository(Protocol):
+    def get_history(
+        self,
+        conversation_id: UUID,
+        customer_id: UUID,
+    ) -> ConversationHistory | None: ...
+
+
+class ConversationStore(
+    ConversationRepository,
+    ConversationAccessRepository,
+    ConversationHistoryRepository,
+    Protocol,
+):
     pass
 
 

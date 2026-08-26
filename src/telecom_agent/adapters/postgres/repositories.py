@@ -15,8 +15,19 @@ from telecom_agent.adapters.postgres.models import (
     PlanSnapshotRecord,
     SyntheticCustomerRecord,
 )
-from telecom_agent.domain.conversations import Conversation
-from telecom_agent.domain.messages import EvidenceType, MessageExchange
+from telecom_agent.domain.conversations import (
+    Conversation,
+    ConversationHistory,
+    ConversationStatus,
+)
+from telecom_agent.domain.messages import (
+    AnswerStatus,
+    EvidenceReference,
+    EvidenceType,
+    Message,
+    MessageExchange,
+    MessageRole,
+)
 
 
 class SqlAlchemyCustomerIdentityRepository:
@@ -57,6 +68,85 @@ class SqlAlchemyConversationRepository:
                     )
                 )
                 is not None
+            )
+
+    def get_history(
+        self,
+        conversation_id: UUID,
+        customer_id: UUID,
+    ) -> ConversationHistory | None:
+        with self._session_factory() as session:
+            conversation = session.scalar(
+                select(ConversationRecord).where(
+                    ConversationRecord.id == conversation_id,
+                    ConversationRecord.customer_id == customer_id,
+                )
+            )
+            if conversation is None:
+                return None
+
+            records = tuple(
+                session.scalars(
+                    select(MessageRecord)
+                    .where(MessageRecord.conversation_id == conversation_id)
+                    .order_by(MessageRecord.created_at, MessageRecord.id)
+                )
+            )
+            evidence_by_message: dict[UUID, list[EvidenceReference]] = {
+                record.id: [] for record in records
+            }
+            message_ids = tuple(evidence_by_message)
+            if message_ids:
+                for plan_row in session.scalars(
+                    select(MessagePlanEvidenceRecord).where(
+                        MessagePlanEvidenceRecord.message_id.in_(message_ids)
+                    )
+                ):
+                    evidence_by_message[plan_row.message_id].append(
+                        EvidenceReference(EvidenceType.PLAN_SNAPSHOT, plan_row.plan_snapshot_id)
+                    )
+                for bill_row in session.scalars(
+                    select(MessageBillEvidenceRecord).where(
+                        MessageBillEvidenceRecord.message_id.in_(message_ids)
+                    )
+                ):
+                    evidence_by_message[bill_row.message_id].append(
+                        EvidenceReference(EvidenceType.BILL_SNAPSHOT, bill_row.bill_snapshot_id)
+                    )
+                for charge_row in session.scalars(
+                    select(MessageChargeEvidenceRecord).where(
+                        MessageChargeEvidenceRecord.message_id.in_(message_ids)
+                    )
+                ):
+                    evidence_by_message[charge_row.message_id].append(
+                        EvidenceReference(
+                            EvidenceType.CHARGE_SNAPSHOT,
+                            charge_row.charge_snapshot_id,
+                        )
+                    )
+
+            messages = tuple(
+                Message(
+                    id=record.id,
+                    conversation_id=record.conversation_id,
+                    role=MessageRole(record.role),
+                    content=record.content,
+                    created_at=record.created_at,
+                    answer_status=(
+                        AnswerStatus(record.answer_status)
+                        if record.answer_status is not None
+                        else None
+                    ),
+                    uncertain=record.uncertain,
+                    evidence=tuple(evidence_by_message[record.id]),
+                )
+                for record in records
+            )
+            return ConversationHistory(
+                id=conversation.id,
+                status=ConversationStatus(conversation.status),
+                created_at=conversation.created_at,
+                messages=messages,
             )
 
 

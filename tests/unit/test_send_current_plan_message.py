@@ -8,10 +8,8 @@ import pytest
 from telecom_agent.domain.messages import AnswerStatus, EvidenceType, MessageExchange, MessageRole
 from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts
 from telecom_agent.ports.messages import AnswerGenerationUnavailableError
-from telecom_agent.services.send_support_message import (
-    ConversationNotFoundError,
-    SendSupportMessageService,
-)
+from telecom_agent.services.errors import ConversationNotFoundError
+from telecom_agent.services.send_support_message import SendSupportMessageService
 
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
 CONVERSATION_ID = UUID("20000000-0000-0000-0000-000000000001")

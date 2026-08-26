@@ -73,6 +73,18 @@ Approved unexpected-charge message contract:
 - Refunds, adjustments, dispute decisions, and the actual escalation endpoint remain outside this
   slice.
 
+Approved conversation-history contract:
+
+- `GET /v1/conversations/{conversation_id}` requires a synthetic bearer token and customer
+  ownership and returns `200 OK` with the conversation metadata and complete message history.
+- Messages are ordered by UTC `created_at` and UUID as a deterministic tiebreaker.
+- User messages expose their base fields; assistant messages also expose answer status,
+  uncertainty, and typed plan, bill, or charge evidence references.
+- The response does not embed snapshot bodies. Pagination is deferred for the focused synthetic
+  MVP.
+- Missing and cross-customer conversations share the privacy-preserving
+  `404 conversation_not_found` response.
+
 ## 3. Technology Stack
 
 - Python 3.12+; local environment currently uses Python 3.13.5.
@@ -187,7 +199,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (focused unexpected-charge investigation implemented locally)
+Last updated: 2026-08-26 (conversation-history retrieval implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -232,6 +244,11 @@ flowchart TB
     ChargeEvidence --> DB
     ChargeInvestigation -. judgment or missing cause .-> Escalation
 
+    Auth --> History[Conversation-history retrieval]
+    History --> HistoryRepo[Owned ordered-message read model]
+    HistoryRepo --> DB
+    History -. supplies context .-> Escalation
+
     Dataset[Versioned current-plan eval dataset] --> Eval[Deterministic grader and gates]
     Eval --> Support
     Eval -. opt-in live cases .-> Model
@@ -245,6 +262,7 @@ flowchart TB
 
     class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Intent,Support,KDDI,Guard,Model,DB,Local implemented
     class Escalation agreed
+    class History,HistoryRepo implemented
     class ChargeInvestigation,ChargeData,ChargeEvidence implemented
     class BillSupport,BillData,BillEvidence implemented
     class Dataset,Eval implemented
@@ -327,9 +345,21 @@ POST /v1/conversations/{id}/messages
   -> 201 grounded, unavailable/uncertain, or unsupported exchange
 ```
 
+Current conversation-history flow:
+
+```text
+GET /v1/conversations/{id}
+  -> authenticate the synthetic customer
+  -> load only a conversation owned by that customer
+  -> retrieve all messages ordered by UTC timestamp and UUID
+  -> bulk-load and merge plan, bill, and charge evidence references
+  -> return metadata and the complete typed message history
+  -> 200 history or privacy-preserving 404
+```
+
 ## 13. Open Architecture Questions
 
-- Exact schemas, errors, status codes, and idempotency for endpoints after message submission.
+- Exact schemas, errors, status codes, and idempotency for escalation endpoints.
 - Exact tables and constraints for escalations.
 - Conversation lifecycle beyond creation and escalation.
 - Evaluation datasets and scorers beyond current-plan support, including escalation success.

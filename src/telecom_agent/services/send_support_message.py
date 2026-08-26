@@ -34,10 +34,7 @@ from telecom_agent.ports.messages import (
     LatestBillProvider,
     MessageExchangeRepository,
 )
-
-
-class ConversationNotFoundError(Exception):
-    pass
+from telecom_agent.services.errors import ConversationNotFoundError
 
 
 class SendSupportMessageService:

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from telecom_agent.domain.conversations import ConversationStatus
 from telecom_agent.domain.messages import AnswerStatus, EvidenceType, MessageRole
@@ -53,3 +53,24 @@ class AssistantMessageCreated(MessageCreated):
 class MessageExchangeCreated(BaseModel):
     user_message: MessageCreated
     assistant_message: AssistantMessageCreated
+
+
+class ConversationUserMessage(MessageCreated):
+    role: Literal[MessageRole.USER]
+
+
+class ConversationAssistantMessage(AssistantMessageCreated):
+    role: Literal[MessageRole.ASSISTANT]
+
+
+ConversationHistoryMessage = Annotated[
+    ConversationUserMessage | ConversationAssistantMessage,
+    Field(discriminator="role"),
+]
+
+
+class ConversationHistoryResponse(BaseModel):
+    id: UUID
+    status: ConversationStatus
+    created_at: datetime
+    messages: list[ConversationHistoryMessage]

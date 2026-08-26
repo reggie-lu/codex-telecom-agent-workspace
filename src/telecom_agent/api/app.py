@@ -11,6 +11,7 @@ from starlette.types import Lifespan
 from telecom_agent.api.auth import UnauthorizedError, build_customer_authentication
 from telecom_agent.api.schemas import (
     ConversationCreated,
+    ConversationHistoryResponse,
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
@@ -30,10 +31,9 @@ from telecom_agent.ports.messages import (
     MessageExchangeRepository,
 )
 from telecom_agent.services.create_conversation import CreateConversationService
-from telecom_agent.services.send_support_message import (
-    ConversationNotFoundError,
-    SendSupportMessageService,
-)
+from telecom_agent.services.errors import ConversationNotFoundError
+from telecom_agent.services.get_conversation_history import GetConversationHistoryService
+from telecom_agent.services.send_support_message import SendSupportMessageService
 
 
 def create_app(
@@ -51,6 +51,7 @@ def create_app(
     app = FastAPI(title="Telecom Customer-Service Agent", lifespan=lifespan)
     authenticate = build_customer_authentication(customer_identities)
     create_conversation = CreateConversationService(repository=conversations)
+    get_conversation_history = GetConversationHistoryService(repository=conversations)
     send_message = SendSupportMessageService(
         conversations=conversations,
         current_plans=current_plans,
@@ -123,6 +124,21 @@ def create_app(
     ) -> ConversationCreated:
         conversation = create_conversation.execute(customer_id=customer_id)
         return ConversationCreated.model_validate(conversation, from_attributes=True)
+
+    @app.get(
+        "/v1/conversations/{conversation_id}",
+        response_model=ConversationHistoryResponse,
+        responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+    )
+    def get_conversation_route(
+        conversation_id: UUID,
+        customer_id: Annotated[UUID, Depends(authenticate)],
+    ) -> ConversationHistoryResponse:
+        history = get_conversation_history.execute(
+            customer_id=customer_id,
+            conversation_id=conversation_id,
+        )
+        return ConversationHistoryResponse.model_validate(history, from_attributes=True)
 
     @app.post(
         "/v1/conversations/{conversation_id}/messages",

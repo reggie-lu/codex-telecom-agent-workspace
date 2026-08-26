@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from telecom_agent.api.app import create_app
 from telecom_agent.domain.bills import BillLineItem, LatestBillDetails
 from telecom_agent.domain.charges import ChargeEvidenceDetails, ChargeEvidenceState
-from telecom_agent.domain.conversations import Conversation
+from telecom_agent.domain.conversations import Conversation, ConversationHistory
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails
 from tests.fakes import DeterministicAnswerGenerator
@@ -37,6 +37,13 @@ class StubConversations:
         assert conversation_id == CONVERSATION_ID
         assert customer_id == CUSTOMER_ID
         return self.owned
+
+    def get_history(
+        self,
+        _conversation_id: UUID,
+        _customer_id: UUID,
+    ) -> ConversationHistory | None:
+        raise AssertionError("Message submission must not retrieve history")
 
 
 class StubCurrentPlans:

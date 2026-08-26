@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — unexpected-charge investigation human-verified
+Status: Active implementation — conversation history human-verified
 
 ## Purpose
 
@@ -203,6 +203,24 @@ curl -i -X POST \
 Expect `201 Created` with `answer_status: "unsupported"`, `uncertain: true`, and no evidence. The
 agent does not issue refunds or adjustments.
 
+Retrieve the complete conversation history:
+
+```bash
+curl -i \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}" \
+  -H 'Authorization: Bearer synthetic-alice-token'
+```
+
+Expect `HTTP/1.1 200 OK` with the conversation `id`, `status`, `created_at`, and every message in
+chronological order. User messages contain their base message fields. Assistant messages also
+contain `answer_status`, `uncertain`, and the same typed `plan_snapshot`, `bill_snapshot`, or
+`charge_snapshot` evidence references returned when each message was created. Version 0.1 returns
+the complete history without pagination and does not embed the referenced snapshot bodies.
+
+The route is authenticated and customer-scoped. A missing conversation and a conversation owned
+by another customer both return the same `404 conversation_not_found` response. This read-only
+feature reuses the existing database schema, so it adds no Alembic migration.
+
 Verify the authentication failure contract separately:
 
 ```bash
@@ -210,7 +228,7 @@ curl -i -X POST http://127.0.0.1:8000/v1/conversations
 ```
 
 Expect `HTTP/1.1 401 Unauthorized`, a `WWW-Authenticate: Bearer` header, and the stable
-`unauthorized` error envelope. Stop the API with `Ctrl-C` in its terminal.
+`unauthorized` error envelope. Stop the API with `Ctrl-C` in its terminal after all verification.
 
 Optionally confirm the persisted conversation:
 

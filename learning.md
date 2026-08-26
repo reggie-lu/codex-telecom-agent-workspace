@@ -141,3 +141,26 @@
   loads the new charge implementation safely.
 - After restarting, the human independently reproduced the grounded explanation with both typed
   evidence references and the explicit boundary against deciding a dispute.
+
+## 2026-08-26 — Selecting conversation history next
+
+- Contextual escalation depends on a trustworthy conversation read model, so history retrieval
+  should precede creation of escalation records.
+- Persisting messages is not enough: the read adapter must restore chronological order and merge
+  plan, bill, and charge evidence links while enforcing the same customer ownership boundary.
+- For the small synthetic MVP, complete history is simpler and more testable than inventing page
+  sizes without a volume requirement; pagination remains the one contract decision for approval.
+
+## 2026-08-26 — Conversation-history retrieval implemented
+
+- Ownership belongs in the history query itself. Returning no row for both absent and differently
+  owned conversations avoids a separate existence check that could leak customer boundaries.
+- Reconstruct message order independently from evidence loading. Bulk-loading the three evidence
+  link tables avoids one query per message while preserving a deterministic message sequence.
+- Evidence references are sufficient for the first handoff boundary; embedding full snapshots
+  would enlarge the API contract before escalation has defined which facts it actually needs.
+- Complete history is appropriate for this bounded synthetic MVP, but the deliberate lack of
+  pagination is now documented rather than accidental.
+- Human verification with a newly created conversation returned `200 OK` and `messages: []`. An
+  empty list is positive evidence that the read route distinguishes a real empty conversation from
+  the privacy-preserving not-found case.

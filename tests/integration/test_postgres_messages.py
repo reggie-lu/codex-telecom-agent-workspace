@@ -325,3 +325,62 @@ def test_postgres_composition_persists_grounded_charge_investigation_evidence(
     assert charge.state == "confirmed"
     assert evidence is not None
     assert evidence.charge_snapshot_id == charge.id
+
+
+def test_postgres_api_returns_complete_ordered_history_with_all_evidence_types(
+    session_factory: sessionmaker[Session],
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
+    client = TestClient(
+        create_postgres_app(
+            TEST_DATABASE_URL,
+            TEST_SAMBANOVA_SETTINGS,
+            answer_generator=DeterministicAnswerGenerator(),
+        )
+    )
+    headers = {"Authorization": f"Bearer {DEVELOPMENT_CUSTOMER.raw_token}"}
+    conversation_response = client.post("/v1/conversations", headers=headers)
+    conversation_id = UUID(conversation_response.json()["id"])
+    questions = (
+        "What is my current plan?",
+        "What is my latest bill?",
+        "Why is my latest bill higher?",
+    )
+    for question in questions:
+        response = client.post(
+            f"/v1/conversations/{conversation_id}/messages",
+            headers=headers,
+            json={"content": question},
+        )
+        assert response.status_code == 201
+
+    response = client.get(
+        f"/v1/conversations/{conversation_id}",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    history = response.json()
+    assert history["id"] == str(conversation_id)
+    assert history["status"] == "open"
+    assert len(history["messages"]) == 6
+    assert [history["messages"][index]["content"] for index in (0, 2, 4)] == list(questions)
+    assert [history["messages"][index]["role"] for index in range(6)] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+    ]
+    assert [item["type"] for item in history["messages"][1]["evidence"]] == [
+        "plan_snapshot"
+    ]
+    assert [item["type"] for item in history["messages"][3]["evidence"]] == [
+        "bill_snapshot"
+    ]
+    assert [item["type"] for item in history["messages"][5]["evidence"]] == [
+        "bill_snapshot",
+        "charge_snapshot",
+    ]

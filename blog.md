@@ -115,3 +115,25 @@ The independent human run confirmed that boundary in the actual API response: th
 only alongside bill and charge snapshots, uncertainty was false for the matching records, and the
 answer ended with human support rather than a verdict. That completes the focused investigation as
 a development checkpoint.
+
+The next step is less glamorous but structurally important: reading the conversation back. Human
+escalation cannot be contextual if the system cannot reconstruct what was asked, what was answered,
+and which plan, bill, or charge evidence supported each response. A customer-owned chronological
+history therefore comes before the handoff workflow, turning stored rows into a reliable context
+boundary rather than an implementation detail.
+
+That read boundary is now implemented. One authenticated request reconstructs the conversation in
+a stable order and restores the evidence references attached to each assistant answer. The database
+query is customer-scoped from the start, so an unknown identifier and another customer's identifier
+look identical at the API boundary.
+
+For this focused prototype, the response is intentionally complete rather than paginated. It keeps
+the upcoming escalation context easy to inspect while the dataset is small, without prematurely
+locking in cursor behavior. Snapshot bodies remain behind their typed references; the history tells
+us what supported an answer without turning one endpoint into a duplicate account-data API.
+
+The first independent read used a newly created conversation and returned an empty message list.
+That modest result exercises an important distinction: an owned conversation with no activity is a
+successful resource, while a missing or differently owned identifier remains hidden behind the
+same not-found response. Histories containing every evidence type are covered by the PostgreSQL
+integration test; future manual sessions can populate the conversation before retrieving it.
