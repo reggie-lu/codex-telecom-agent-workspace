@@ -51,3 +51,19 @@ target without weakening the dataset.
 The human-run live evaluation reproduced all three failures and the split aggregate scores. That
 agreement between independent runs is the checkpoint: the measurement system works, while the
 product remains correctly blocked from release until routine quality improves.
+
+The remediation kept that measurement contract fixed. Two narrow intent patterns taught the
+orchestrator to recognize natural questions about monthly data and the customer's mobile service.
+The recurring-charge failure required a different kind of investigation: the model had answered
+the question directly with only the price. That was factually correct but incomplete relative to
+the evidence contract, so the guard was right to discard it.
+
+Instead of making the guard more permissive, the prompt now tells MiniMax-M3 to state all four
+canonical values exactly once even when only one is requested. With the dataset, numeric checks,
+and gates unchanged, both offline and live runs reached 10/10 routine and 6/6 safety. The result is
+a useful pattern for future billing work: diagnose which boundary failed, correct that boundary,
+and prove the improvement against the same corner cases before expanding scope.
+
+The independent human run produced the same perfect routine and safety scores. That closes the
+remediation as a human-verified development checkpoint and gives the next feature a clean,
+repeatable current-plan foundation.

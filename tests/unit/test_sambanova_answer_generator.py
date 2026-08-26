@@ -114,6 +114,8 @@ def test_generator_sends_only_question_and_canonical_facts() -> None:
     assert "20 GB" in prompt_text
     assert "JPY 4,500" in prompt_text
     assert "August 1, 2026" in prompt_text
+    assert "even when the customer asks about only one" in prompt_text
+    assert "Mention each canonical value exactly once" in prompt_text
     assert "10000000-0000-0000-0000-000000000001" not in prompt_text
 
 

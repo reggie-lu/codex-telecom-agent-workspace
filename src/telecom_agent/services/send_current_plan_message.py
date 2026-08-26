@@ -188,7 +188,13 @@ def _is_current_plan_question(content: str) -> bool:
     words = set(normalized.split())
     return "plan" in words or any(
         phrase in normalized
-        for phrase in ("data allowance", "monthly recurring charge", "mobile package")
+        for phrase in (
+            "data allowance",
+            "how much data",
+            "monthly recurring charge",
+            "mobile package",
+            "mobile service",
+        )
     )
 
 

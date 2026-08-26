@@ -161,7 +161,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (current-plan evaluation baseline implemented locally)
+Last updated: 2026-08-26 (current-plan intent-quality remediation implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -185,7 +185,8 @@ flowchart TB
     ConversationRepo --> DB[(Local PostgreSQL)]
 
     Auth --> Message[Send support message]
-    Message --> Support[Grounded plan orchestration]
+    Message --> Intent[Deterministic current-plan intent matching]
+    Intent --> Support[Grounded plan orchestration]
     Support --> KDDI[Synthetic KDDI current-plan data]
     Support --> Model[SambaNova MiniMax-M3]
     Model --> Guard[Typed grounding and output guard]
@@ -204,7 +205,7 @@ flowchart TB
     classDef agreed fill:#dbeafe,stroke:#2563eb,color:#111
     classDef deferred fill:#eeeeee,stroke:#777,color:#333,stroke-dasharray:5 5
 
-    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Support,KDDI,Guard,Model,DB,Local implemented
+    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Intent,Support,KDDI,Guard,Model,DB,Local implemented
     class Escalation agreed
     class Dataset,Eval implemented
     class Docker,K8s deferred

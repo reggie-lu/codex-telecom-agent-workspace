@@ -221,9 +221,11 @@ def test_missing_or_cross_customer_conversation_uses_same_not_found_failure() ->
     [
         "Tell me about my plan.",
         "Explain my current mobile plan!",
+        "How much data do I get each month?",
+        "Which mobile service am I using?",
     ],
 )
-def test_current_plan_intent_ignores_terminal_punctuation(content: str) -> None:
+def test_current_plan_intent_recognizes_supported_paraphrases(content: str) -> None:
     service, _plans, _exchanges, generator = build_service(plan=AVAILABLE_PLAN)
 
     exchange = service.execute(

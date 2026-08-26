@@ -63,3 +63,19 @@
   requiring a grounded response would incorrectly classify safe refusal as unsafe.
 - Human verification reproduced the same live results: 7/10 routine, 6/6 safety, and a failed
   release gate. Reproducibility confirms the evaluator is suitable for the next remediation slice.
+
+## 2026-08-26 — Focused current-plan quality remediation
+
+- Preserve failing evaluation cases as regression tests; do not rewrite the dataset to make a
+  score improve. Adding the exact `how much data` and `mobile service` intent patterns moved the
+  unchanged offline routine score from 8/10 to 10/10.
+- Inspect the rejected generation before changing a guard. For the recurring-charge case,
+  MiniMax-M3 returned only `JPY 4,500`; it did not invent a claim. The guard correctly rejected the
+  answer because the evidence contract requires all four canonical values.
+- The smallest safe correction was prompt-level: explicitly require all four values exactly once
+  even when the customer asks about only one. The numeric guard and adversarial cases did not need
+  to be relaxed.
+- The unchanged live evaluation then passed 10/10 routine and 6/6 safety. This is automated
+  development evidence until the human independently reproduces it.
+- Independent human verification reproduced 10/10 routine, 6/6 safety, and a passing release gate;
+  the remediation can now be recorded as a development checkpoint.

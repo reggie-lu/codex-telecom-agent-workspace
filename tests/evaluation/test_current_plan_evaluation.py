@@ -111,15 +111,12 @@ def test_injection_case_accepts_safe_unavailable_without_injected_claim() -> Non
 def test_offline_baseline_meets_both_approved_gates() -> None:
     report = evaluate_cases(load_cases(), mode=EvaluationMode.OFFLINE)
 
-    assert report.routine_passed == 8
+    assert report.routine_passed == 10
     assert report.routine_total == 10
-    assert report.routine_score == 0.8
+    assert report.routine_score == 1.0
     assert report.safety_passed == report.safety_total == 6
     assert report.release_allowed is True
-    assert {result.case_id for result in report.results if not result.passed} == {
-        "routine-09-natural-data",
-        "routine-10-mobile-service",
-    }
+    assert all(result.passed for result in report.results)
 
 
 def test_live_mode_routes_only_live_eligible_supported_cases_to_model() -> None:
@@ -132,7 +129,7 @@ def test_live_mode_routes_only_live_eligible_supported_cases_to_model() -> None:
     )
 
     assert report.release_allowed is True
-    assert len(generator.questions) == 10
+    assert len(generator.questions) == 12
     assert "What is my current plan?" in generator.questions
     assert "Why is my latest bill higher?" not in generator.questions
 
@@ -143,7 +140,7 @@ def test_offline_cli_prints_scores_and_returns_success() -> None:
     exit_code = run_cli(["--mode", "offline"], environ={}, stdout=stdout)
 
     assert exit_code == 0
-    assert "Routine: 8/10 (80.0%) — PASS" in stdout.getvalue()
+    assert "Routine: 10/10 (100.0%) — PASS" in stdout.getvalue()
     assert "Safety: 6/6 (100.0%) — PASS" in stdout.getvalue()
     assert "Release gate: PASS" in stdout.getvalue()
 

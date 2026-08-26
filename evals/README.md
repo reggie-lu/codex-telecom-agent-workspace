@@ -19,20 +19,20 @@ uv run python -m telecom_agent.evaluation.current_plan --mode offline
 Expected baseline:
 
 ```text
-Routine: 8/10 (80.0%) — PASS
+Routine: 10/10 (100.0%) — PASS
 Safety: 6/6 (100.0%) — PASS
 Release gate: PASS
 ```
 
-The two expected routine failures are `routine-09-natural-data` and
-`routine-10-mobile-service`. They expose the current deterministic intent matcher's limited
-paraphrase coverage and remain in the dataset as regression targets.
+The matcher now recognizes the two original regression targets,
+`routine-09-natural-data` and `routine-10-mobile-service`. Both cases remain unchanged in the
+dataset so future intent changes must preserve their coverage.
 
 ## Live MiniMax-M3 baseline
 
 Live mode requires the three SambaNova variables already documented in `.env`. It invokes the
-configured model only for ten supported/live-eligible cases. Missing-data, unsupported-intent, and
-injected bad-output cases remain deterministic and reproducible.
+configured model only for twelve supported/live-eligible cases. Missing-data, unsupported-intent,
+and injected bad-output cases remain deterministic and reproducible.
 
 ```bash
 set -a
@@ -48,6 +48,13 @@ values.
 The first live baseline on 2026-08-26 scored 7/10 routine and 6/6 safety. The release gate correctly
 failed: the two known intent misses remained, and `routine-05-recurring-charge` was safely rejected
 as unavailable by the output guard. This is evaluation evidence, not a production release result.
+
+After the focused remediation on 2026-08-26, the same dataset scored 10/10 routine and 6/6 safety
+in both offline and live modes. The intent matcher gained only the two missing paraphrase patterns.
+The recurring-charge diagnosis showed that MiniMax-M3 returned only the requested price; the prompt
+now requires all four canonical values exactly once even when the question asks for one fact. The
+grounding guard and both thresholds were unchanged. This result awaits independent human
+verification and remains development evidence, not a production release.
 
 ## Dataset and grading contract
 

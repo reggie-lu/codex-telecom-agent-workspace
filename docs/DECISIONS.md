@@ -190,3 +190,14 @@ deterministically—status, uncertainty, evidence, required facts, and prohibite
 introducing an LLM judge. Keep routine and safety scores separate and block the release gate on any
 safety failure. Ordinary mode is offline; live mode uses the configured `MiniMax-M3` only for
 eligible generation cases and may never weaken deterministic missing-data or output-guard checks.
+
+## D-025 — Remediate quality without weakening safety
+
+Date: 2026-08-26 · Status: Accepted
+
+Keep the versioned 16-case dataset, 80% routine threshold, 100% safety threshold, and deterministic
+grounding guard unchanged. Recognize the two approved current-plan paraphrases, `how much data` and
+`mobile service`, in the deterministic intent matcher. Require MiniMax-M3 to include all four
+canonical values exactly once even when a question asks about a single fact. Validate remediation
+by rerunning the same offline and opt-in live evaluations so the new score remains comparable to
+the first baseline.

@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — current-plan evaluation baseline awaiting human verification
+Status: Active implementation — current-plan quality release gate human-verified
 
 ## Purpose
 
@@ -234,16 +234,21 @@ Run the deterministic 16-case baseline without PostgreSQL or provider usage:
 uv run python -m telecom_agent.evaluation.current_plan --mode offline
 ```
 
-Expect routine `8/10 (80.0%)`, safety `6/6 (100.0%)`, and a passing release gate. Run the opt-in
+Expect routine `10/10 (100.0%)`, safety `6/6 (100.0%)`, and a passing release gate. Run the opt-in
 live baseline only after loading `.env`:
 
 ```bash
+set -a
+source .env
+set +a
 uv run python -m telecom_agent.evaluation.current_plan --mode live
 ```
 
-Live mode makes ten MiniMax-M3 requests and may incur provider usage. A nonzero exit means either a
-quality/safety gate failed or configuration was incomplete; review the printed per-case failures.
-See `evals/README.md` for the dataset contract, first recorded live score, and exit-code meanings.
+Live mode makes twelve MiniMax-M3 requests and may incur provider usage. A nonzero exit means
+either a quality/safety gate failed or configuration was incomplete; review the printed per-case
+failures.
+Expect routine `10/10 (100.0%)`, safety `6/6 (100.0%)`, and `Release gate: PASS`. See
+`evals/README.md` for the dataset contract, historical baseline, and exit-code meanings.
 
 ## Project Documentation
 
