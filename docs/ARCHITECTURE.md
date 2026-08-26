@@ -149,7 +149,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 14:13 JST
+Last updated: 2026-08-26 14:35 JST
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -159,6 +159,13 @@ approval before implementation.
 flowchart TB
     Client[Local API or evaluation client] --> API[FastAPI API]
     API --> Auth[Synthetic bearer authentication]
+    Client --> Health[Unauthenticated internal health check]
+    Health --> DB
+
+    Developer[Local developer] --> CLI[telecom-agent CLI]
+    CLI --> Seed[Idempotent synthetic seed]
+    Seed --> DB
+    CLI --> API
 
     Auth --> Create[Create conversation]
     Create --> ConversationService[Create-conversation service]
@@ -179,7 +186,7 @@ flowchart TB
     classDef agreed fill:#dbeafe,stroke:#2563eb,color:#111
     classDef deferred fill:#eeeeee,stroke:#777,color:#333,stroke-dasharray:5 5
 
-    class Client,API,Auth,Create,ConversationService,ConversationRepo,DB,Local implemented
+    class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,DB,Local implemented
     class Message,Support,KDDI,Model,Escalation agreed
     class Docker,K8s deferred
 ```
@@ -193,6 +200,15 @@ POST /v1/conversations
   -> SQLAlchemy conversation repository
   -> local PostgreSQL
   -> 201 Created
+```
+
+Current local runtime flow:
+
+```text
+uv run telecom-agent seed  -> hash token -> local PostgreSQL
+uv run telecom-agent serve -> FastAPI on 127.0.0.1:8000
+GET /health                -> SELECT 1 -> 200 ok or 503 unavailable
+Ctrl-C                     -> graceful API shutdown -> dispose database engine
 ```
 
 ## 13. Open Architecture Questions

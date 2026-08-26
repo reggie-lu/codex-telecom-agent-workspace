@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -19,3 +20,8 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok", "unavailable"]
+    database: Literal["ok", "unavailable"]

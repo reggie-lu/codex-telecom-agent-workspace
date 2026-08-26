@@ -8,13 +8,19 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, inspect, select
+from sqlalchemy import Engine, create_engine, delete, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from telecom_agent.adapters.postgres.health import SqlAlchemyDatabaseHealth
 from telecom_agent.adapters.postgres.models import ConversationRecord, SyntheticCustomerRecord
 from telecom_agent.adapters.postgres.repositories import (
     SqlAlchemyConversationRepository,
     SqlAlchemyCustomerIdentityRepository,
+)
+from telecom_agent.adapters.postgres.seeding import (
+    DEVELOPMENT_CUSTOMER,
+    SeedResult,
+    seed_synthetic_customer,
 )
 from telecom_agent.api.composition import create_postgres_app
 from telecom_agent.domain.conversations import Conversation, ConversationStatus
@@ -44,6 +50,17 @@ def migrated_engine() -> Iterator[Engine]:
 @pytest.fixture
 def session_factory(migrated_engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(migrated_engine, expire_on_commit=False)
+
+
+@pytest.fixture(autouse=True)
+def clean_records(session_factory: sessionmaker[Session]) -> Iterator[None]:
+    with session_factory.begin() as session:
+        session.execute(delete(ConversationRecord))
+        session.execute(delete(SyntheticCustomerRecord))
+    yield
+    with session_factory.begin() as session:
+        session.execute(delete(ConversationRecord))
+        session.execute(delete(SyntheticCustomerRecord))
 
 
 def test_initial_migration_creates_customer_and_conversation_tables(
@@ -130,3 +147,25 @@ def test_conversation_api_persists_to_postgres(
 
     assert saved is not None
     assert saved.customer_id == customer_id
+
+
+def test_development_seed_is_idempotent_and_never_stores_raw_token(
+    session_factory: sessionmaker[Session],
+) -> None:
+    first = seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
+    second = seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
+
+    with session_factory() as session:
+        customers = list(session.scalars(select(SyntheticCustomerRecord)))
+
+    assert first is SeedResult.CREATED
+    assert second is SeedResult.EXISTING
+    assert len(customers) == 1
+    assert customers[0].id == DEVELOPMENT_CUSTOMER.customer_id
+    assert customers[0].display_name == "Synthetic Alice"
+    assert customers[0].token_hash == sha256(DEVELOPMENT_CUSTOMER.raw_token.encode()).hexdigest()
+    assert customers[0].token_hash != DEVELOPMENT_CUSTOMER.raw_token
+
+
+def test_postgres_health_check_reports_reachable_database(migrated_engine: Engine) -> None:
+    assert SqlAlchemyDatabaseHealth(migrated_engine).is_healthy() is True

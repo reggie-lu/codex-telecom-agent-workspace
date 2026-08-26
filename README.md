@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — conversation creation complete
+Status: Active implementation — local runtime awaiting human verification
 
 ## Purpose
 
@@ -64,61 +64,47 @@ The first migration should finish with output similar to:
 Running upgrade  -> 20260826_01, create conversations
 ```
 
-To stop the local server later without deleting its data:
+To stop PostgreSQL later without deleting its data:
 
 ```bash
 /opt/homebrew/bin/pg_ctl -D /opt/homebrew/var/postgresql@14 stop
 ```
 
-The first implemented vertical slice is `POST /v1/conversations`. It authenticates a synthetic
-customer by a hashed bearer token and persists a distinct open conversation. The API is composed
-with PostgreSQL through `telecom_agent.api.composition.create_postgres_app`; a dedicated local seed
-command and server entry point are intentionally deferred to the next implementation slice.
-
-## Manual API Verification
-
-The following is the temporary manual procedure until dedicated seed and server commands are
-implemented.
-
-Seed the synthetic customer used by the API examples. This command is safe to repeat because the
-token hash is unique and conflicts are ignored.
+Seed the approved synthetic development customer. This command is idempotent and stores only the
+token hash:
 
 ```bash
-/opt/homebrew/bin/psql \
-  -h 127.0.0.1 \
-  -p 55432 \
-  -d telecom_agent \
-  -c "INSERT INTO synthetic_customers
-      (id, display_name, token_hash, created_at)
-      VALUES (
-        '10000000-0000-0000-0000-000000000001',
-        'Synthetic Alice',
-        'e148705fb631632c8914aec8a43431a540891345f0700c2ca4f45db551765ebc',
-        NOW()
-      )
-      ON CONFLICT (token_hash) DO NOTHING;"
+uv run telecom-agent seed
 ```
 
-The stored hash corresponds to this development-only bearer token:
-
-```text
-synthetic-alice-token
-```
+Expect either `Created Synthetic Alice` or `Synthetic Alice already exists`, followed by the
+development-only token.
 
 Start the API from the repository root:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://bowenl@127.0.0.1:55432/telecom_agent' \
-PYTHONPATH=src \
-uv run python -c '
-import os
-import uvicorn
-from telecom_agent.api.composition import create_postgres_app
-
-app = create_postgres_app(os.environ["DATABASE_URL"])
-uvicorn.run(app, host="127.0.0.1", port=8000)
-'
+uv run telecom-agent serve
 ```
+
+The server binds only to `http://127.0.0.1:8000`. Stop it gracefully with `Ctrl-C`.
+
+## Manual API Verification
+
+With `uv run telecom-agent serve` running, verify PostgreSQL readiness from another terminal:
+
+```bash
+curl -i http://127.0.0.1:8000/health
+```
+
+Expect `HTTP/1.1 200 OK` and exactly:
+
+```json
+{"status":"ok","database":"ok"}
+```
+
+The endpoint is intentionally unauthenticated but contains no sensitive details. It is reachable
+only through localhost and must remain internal rather than publicly routed in any future
+deployment.
 
 In another terminal, create a conversation:
 

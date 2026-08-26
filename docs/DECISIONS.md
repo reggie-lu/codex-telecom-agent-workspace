@@ -145,3 +145,14 @@ Date: 2026-08-26 · Status: Accepted
 `open` status, and UTC creation timestamp while omitting customer identity. Missing or invalid tokens
 return a stable `401` error envelope and bearer challenge. Idempotency is deferred, so each successful
 request creates a distinct empty conversation.
+
+## D-021 — Minimal internal health endpoint
+
+Date: 2026-08-26 · Status: Accepted
+
+Expose unauthenticated `GET /health` because infrastructure probes must work independently of
+customer authentication. On healthy PostgreSQL it returns only
+`200 {"status":"ok","database":"ok"}`; on database failure it returns only
+`503 {"status":"unavailable","database":"unavailable"}`. It is localhost-only in the current
+runtime and must remain internal rather than publicly routed in future deployments. Never expose
+credentials, addresses, exception text, or customer data.

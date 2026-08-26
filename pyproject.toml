@@ -14,6 +14,13 @@ dependencies = [
     "uvicorn",
 ]
 
+[project.scripts]
+telecom-agent = "telecom_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [dependency-groups]
 dev = [
     "httpx",
@@ -22,8 +29,8 @@ dev = [
     "ruff",
 ]
 
-[tool.uv]
-package = false
+[tool.hatch.build.targets.wheel]
+packages = ["src/telecom_agent"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --import-mode=importlib"

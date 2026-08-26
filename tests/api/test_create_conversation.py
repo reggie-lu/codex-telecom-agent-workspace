@@ -27,6 +27,11 @@ class RecordingConversationRepository:
         self.saved.append(conversation)
 
 
+class HealthyDatabase:
+    def is_healthy(self) -> bool:
+        return True
+
+
 @pytest.fixture
 def repository() -> RecordingConversationRepository:
     return RecordingConversationRepository()
@@ -37,6 +42,7 @@ def client(repository: RecordingConversationRepository) -> TestClient:
     app = create_app(
         customer_identities=StubCustomerIdentityRepository(),
         conversations=repository,
+        database_health=HealthyDatabase(),
     )
     return TestClient(app)
 
