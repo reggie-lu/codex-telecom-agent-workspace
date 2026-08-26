@@ -137,3 +137,62 @@ That modest result exercises an important distinction: an owned conversation wit
 successful resource, while a missing or differently owned identifier remains hidden behind the
 same not-found response. Histories containing every evidence type are covered by the PostgreSQL
 integration test; future manual sessions can populate the conversation before retrieving it.
+
+With history in place, the project can finally cross from self-service explanation into an actual
+handoff workflow. The next slice will package the customer's conversation and its evidence into a
+durable mock escalation, then let the customer check what happened to that request.
+
+The difficult part is not drawing a ticket-shaped table. It is preserving truthful state across
+the boundary: a request that fails must still be visible as failed, while a request accepted by the
+mock must not lose the context that justified it. The first decision is therefore when the system
+is allowed to create that durable request—only after explicit customer action, or automatically
+when the agent reaches a judgment boundary.
+
+The answer is explicit action. Reaching a limit in automated support can justify recommending a
+human, but it does not establish permission to open a case. Keeping those events separate makes the
+handoff auditable and prevents the system from surprising customers with tickets they did not ask
+for.
+
+Explicit consent now has a concrete payload: a short reason written by the customer. It records the
+purpose of the handoff without forcing them to paste their history again, because the context model
+already carries the messages and evidence that led to the request.
+
+The workflow also separates durable receipt from provider acceptance. It writes `requested` first,
+then lets the mock move the record to `queued` or `failed`. Both outcomes are real created
+resources; the status and retry guidance tell the customer what actually happened instead of
+turning a provider failure into either a false success or a vanished request.
+
+The workflow will also refuse a second active ticket for the same conversation. That policy belongs
+in PostgreSQL as well as application code: two nearly simultaneous clicks should not bypass a
+friendly preflight check. Once a request is failed or resolved, the customer is free to try again.
+
+The submitted context will be a snapshot, not a live view. That choice matters as soon as the
+customer continues chatting: a later message should not retroactively appear in a ticket that was
+already handed off. The JSONB payload remains typed in the domain and contains only conversation
+content and evidence references—never credentials or duplicated account snapshots.
+
+Customers checking the handoff will see a deliberately small resource: what they requested, its
+current state, timestamps, and any next step. The larger context is for the mock representative,
+not a second API surface for replaying account conversations. Ownership checks make an unknown ID
+and another customer's ID indistinguishable.
+
+The local runtime will follow the happy handoff path consistently, accepting valid requests into
+the queue. Failure remains fully testable by replacing the mock adapter in the automated suite;
+there is no secret phrase a customer can type to change infrastructure behavior. That keeps test
+control where it belongs and leaves customer language as data.
+
+The resulting implementation makes the reliability promise visible in storage. It writes the
+request before crossing the mock boundary, records acceptance as queued, and converts both explicit
+rejection and provider unavailability into a failed resource with a retry instruction. A database
+index prevents two active tickets even under concurrent creation attempts.
+
+The handoff itself contains a frozen copy of the ordered conversation and evidence references. The
+customer-facing resource stays small, but the mock representative receives enough context to avoid
+asking the customer to begin again. Migration, API, lifecycle, failure, privacy, duplicate, and
+context-persistence behavior are now exercised together in the PostgreSQL suite.
+
+The independent localhost run completed the loop. The customer-created handoff was retrieved by its
+new ID with the original conversation, reason, queued status, and UTC timestamps intact. Because
+the mock accepted it, the next step was correctly null rather than displaying misleading retry
+guidance. Contextual human escalation is now a human-verified development capability, while actual
+KDDI representative delivery remains deliberately outside the prototype.

@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — conversation history human-verified
+Status: Active implementation — contextual human escalation human-verified
 
 ## Purpose
 
@@ -72,6 +72,7 @@ Running upgrade  -> 20260826_01, create conversations
 Running upgrade 20260826_01 -> 20260826_02, Create messages and plan snapshots.
 Running upgrade 20260826_02 -> 20260826_03, Create bill snapshots, line items, and message evidence.
 Running upgrade 20260826_03 -> 20260826_04, Create charge evidence snapshots and message evidence.
+Running upgrade 20260826_04 -> 20260826_05, Create contextual human escalations.
 ```
 
 To stop PostgreSQL later without deleting its data:
@@ -221,6 +222,36 @@ The route is authenticated and customer-scoped. A missing conversation and a con
 by another customer both return the same `404 conversation_not_found` response. This read-only
 feature reuses the existing database schema, so it adds no Alembic migration.
 
+Request an explicit contextual human handoff for the same conversation:
+
+```bash
+curl -i -X POST \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/escalations" \
+  -H 'Authorization: Bearer synthetic-alice-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"reason":"I do not recognize this roaming charge."}'
+```
+
+Expect `HTTP/1.1 201 Created`, the same `conversation_id`, the trimmed reason, `status: "queued"`,
+UTC `created_at` and `updated_at`, and `next_step: null`. Copy the returned `id`:
+
+```bash
+ESCALATION_ID='<paste-escalation-id>'
+```
+
+Retrieve its durable status:
+
+```bash
+curl -i \
+  "http://127.0.0.1:8000/v1/escalations/${ESCALATION_ID}" \
+  -H 'Authorization: Bearer synthetic-alice-token'
+```
+
+Expect `200 OK` and the same public escalation fields. The internal immutable handoff context is
+not returned. Repeating the POST while this escalation is active returns
+`409 escalation_already_active`. The runtime mock always accepts valid requests; automated tests
+exercise `failed` status and its safe retry guidance.
+
 Verify the authentication failure contract separately:
 
 ```bash
@@ -294,6 +325,19 @@ After investigating the charge, confirm the persisted causal evidence:
           ORDER BY m.created_at DESC
           LIMIT 1
       );"
+```
+
+After requesting escalation, confirm its status and immutable context size:
+
+```bash
+/opt/homebrew/bin/psql \
+  -h 127.0.0.1 \
+  -p 55432 \
+  -d telecom_agent \
+  -c "SELECT id, conversation_id, status, reason,
+             jsonb_array_length(handoff_context->'conversation'->'messages') AS message_count
+      FROM escalations
+      WHERE id = '${ESCALATION_ID}';"
 ```
 
 To include PostgreSQL integration coverage, create an isolated test database once and set

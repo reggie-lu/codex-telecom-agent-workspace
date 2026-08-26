@@ -16,7 +16,9 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.sql import text
 
 
 class Base(DeclarativeBase):
@@ -226,3 +228,48 @@ class MessageChargeEvidenceRecord(Base):
         ForeignKey("charge_evidence_snapshots.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
+class EscalationRecord(Base):
+    __tablename__ = "escalations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('requested', 'queued', 'assigned', 'resolved', 'failed')",
+            name="ck_escalations_status",
+        ),
+        CheckConstraint(
+            "char_length(reason) BETWEEN 1 AND 1000",
+            name="ck_escalations_reason_length",
+        ),
+        CheckConstraint(
+            "(status = 'failed' AND next_step IS NOT NULL) OR "
+            "(status <> 'failed' AND next_step IS NULL)",
+            name="ck_escalations_failed_next_step",
+        ),
+        Index("ix_escalations_customer_id", "customer_id"),
+        Index("ix_escalations_conversation_id", "conversation_id"),
+        Index(
+            "uq_escalations_active_conversation",
+            "conversation_id",
+            unique=True,
+            postgresql_where=text("status IN ('requested', 'queued', 'assigned')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    customer_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("synthetic_customers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_step: Mapped[str | None] = mapped_column(Text, nullable=True)
+    handoff_context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

@@ -164,3 +164,40 @@
 - Human verification with a newly created conversation returned `200 OK` and `messages: []`. An
   empty list is positive evidence that the read route distinguishes a real empty conversation from
   the privacy-preserving not-found case.
+
+## 2026-08-26 — Contextual escalation planning started
+
+- Conversation history now supplies the exact context boundary that escalation needed; handoff
+  should consume that read model instead of independently reconstructing messages and evidence.
+- Reliability means persisting both successful and failed mock handoff attempts. A provider failure
+  must never be reported as a queued request or disappear without a safe next step.
+- Whether escalation is explicit or automatic affects customer consent, duplicates, and the API
+  contract, so it must be approved before behavioral tests encode it.
+- The approved boundary requires explicit authenticated customer action. Existing assistant wording
+  remains a recommendation and cannot be mistaken for a submitted handoff.
+- Requiring a bounded reason captures the customer's intent without asking them to reproduce the
+  entire issue; the handoff context remains responsible for messages and evidence.
+- Persisting `requested` before the mock call makes failure observable. Returning `201 failed` is
+  truthful because the request record exists even though the handoff provider did not accept it.
+- Treat duplicate prevention as a database invariant, not only a preflight query. A partial unique
+  constraint on active states protects concurrent requests while terminal states permit retry.
+- Snapshot handoff context at creation rather than reading it dynamically later. Even though
+  messages are immutable, new follow-ups would otherwise change what a past escalation appears to
+  have contained.
+- A status endpoint needs only operational state and guidance. Keeping handoff context internal
+  reduces repeated disclosure of conversation and billing content through another public route.
+- Failure simulation belongs at the adapter boundary. Special reason strings would mix test
+  controls with customer data and risk turning legitimate text into unexpected behavior.
+
+## 2026-08-26 — Contextual escalation implemented
+
+- The reliability sequence is intentionally two transactions: persist `requested`, call the mock,
+  then persist `queued` or `failed`. A crash cannot erase the fact that the customer asked.
+- Provider rejection and provider exceptions converge on the same durable failed state and safe
+  next step; neither can bubble out after leaving an unexplained requested record.
+- A partial unique PostgreSQL index enforces one active escalation while allowing a failed request
+  to be retried successfully.
+- JSONB preserves the immutable nested handoff payload, while domain reconstruction keeps status
+  retrieval typed and customer-scoped.
+- Human verification confirmed the full create-and-status loop: the accepted mock request remained
+  queued with the same reason and conversation ID, and correctly omitted a retry next step.

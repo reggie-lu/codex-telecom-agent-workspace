@@ -85,6 +85,31 @@ Approved conversation-history contract:
 - Missing and cross-customer conversations share the privacy-preserving
   `404 conversation_not_found` response.
 
+Approved escalation trigger boundary:
+
+- The agent may recommend human support when judgment or unavailable evidence requires it.
+- Only an explicit authenticated customer request may create an escalation; recommendations and
+  unsupported requests never create a ticket automatically.
+- `POST /v1/conversations/{conversation_id}/escalations` requires JSON `reason`, trimmed to 1–1,000
+  Unicode characters. Invalid input returns stable `422 invalid_escalation_reason`.
+- Creation first persists `requested`, then synchronously calls the deterministic mock. Acceptance
+  transitions to `queued`; rejection or unavailability transitions to `failed` with a safe retry
+  next step.
+- Both durable outcomes return `201 Created` with ID, conversation ID, reason, status, creation and
+  update timestamps, and nullable `next_step`.
+- One conversation may have at most one active escalation in `requested`, `queued`, or `assigned`.
+  Another creation request returns `409 escalation_already_active`; a `resolved` or `failed`
+  escalation permits a new request. PostgreSQL must enforce the active-record invariant.
+- Creation freezes an immutable typed handoff context in PostgreSQL `JSONB`: conversation metadata,
+  ordered messages, assistant status/uncertainty, and typed evidence references. It excludes raw
+  snapshot bodies and credentials, and later messages never alter the submitted context.
+- Creation and `GET /v1/escalations/{escalation_id}` expose the same public fields: ID, conversation
+  ID, reason, status, creation/update timestamps, and nullable `next_step`. Handoff context remains
+  internal. Missing and cross-customer escalation IDs share `404 escalation_not_found`.
+- The runtime deterministic mock accepts valid handoffs and transitions them to `queued`. Automated
+  tests inject failure to verify durable `failed` behavior; customer content and public settings
+  cannot force mock failure. `assigned` and `resolved` do not auto-progress in this slice.
+
 ## 3. Technology Stack
 
 - Python 3.12+; local environment currently uses Python 3.13.5.
@@ -135,7 +160,8 @@ retrieved plan and bill data are persisted as snapshots. Raw bearer tokens are n
 - `Conversation`: UUID, customer, status, timestamps.
 - `Message`: UUID, conversation, role, Unicode content, UTC timestamp, typed evidence references,
   uncertainty indicator.
-- `Escalation`: UUID, customer, conversation, reason, status, timestamps, handoff context.
+- `Escalation`: UUID, customer, conversation, reason, status, timestamps, next step, and immutable
+  typed JSONB handoff context.
 
 Core types: UUID identifiers; Python decimal and PostgreSQL `NUMERIC` for money; constrained
 three-letter currency (synthetic default `JPY`); dates for calendar values; timezone-aware UTC
@@ -199,7 +225,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (conversation-history retrieval implemented locally)
+Last updated: 2026-08-26 (contextual human escalation implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -247,7 +273,13 @@ flowchart TB
     Auth --> History[Conversation-history retrieval]
     History --> HistoryRepo[Owned ordered-message read model]
     HistoryRepo --> DB
-    History -. supplies context .-> Escalation
+    History --> Escalation[Create contextual human escalation]
+    Escalation --> EscalationService[Escalation service]
+    EscalationService --> MockHandoff[Deterministic mock handoff]
+    EscalationService --> EscalationRepo[Escalation repository]
+    EscalationRepo --> DB
+    Auth --> EscalationStatus[Retrieve escalation status]
+    EscalationStatus --> EscalationRepo
 
     Dataset[Versioned current-plan eval dataset] --> Eval[Deterministic grader and gates]
     Eval --> Support
@@ -261,7 +293,7 @@ flowchart TB
     classDef deferred fill:#eeeeee,stroke:#777,color:#333,stroke-dasharray:5 5
 
     class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Intent,Support,KDDI,Guard,Model,DB,Local implemented
-    class Escalation agreed
+    class Escalation,EscalationService,MockHandoff,EscalationRepo,EscalationStatus implemented
     class History,HistoryRepo implemented
     class ChargeInvestigation,ChargeData,ChargeEvidence implemented
     class BillSupport,BillData,BillEvidence implemented
@@ -357,10 +389,25 @@ GET /v1/conversations/{id}
   -> 200 history or privacy-preserving 404
 ```
 
+Current contextual-escalation flow:
+
+```text
+POST /v1/conversations/{id}/escalations
+  -> authenticate customer and load the complete owned conversation
+  -> freeze ordered messages and typed evidence references into immutable JSONB context
+  -> persist requested before calling the deterministic mock handoff
+  -> transition to queued on acceptance or failed with a safe next step
+  -> enforce one active escalation per conversation in PostgreSQL
+  -> 201 durable escalation or stable 404/409/422 error
+
+GET /v1/escalations/{id}
+  -> authenticate and retrieve only an escalation owned by that customer
+  -> return minimal public status fields without internal handoff context
+  -> 200 escalation or privacy-preserving 404
+```
+
 ## 13. Open Architecture Questions
 
-- Exact schemas, errors, status codes, and idempotency for escalation endpoints.
-- Exact tables and constraints for escalations.
 - Conversation lifecycle beyond creation and escalation.
 - Evaluation datasets and scorers beyond current-plan support, including escalation success.
 - All production KDDI identity, API, compliance, deployment, and operations concerns.

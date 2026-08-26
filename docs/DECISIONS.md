@@ -238,3 +238,73 @@ messages expose base fields; assistant messages additionally expose status, unce
 plan, bill, or charge evidence references. Do not embed snapshot bodies and defer pagination.
 Resolve ownership in the repository query and use the same `404 conversation_not_found` response
 for absent and cross-customer conversations.
+
+## D-029 — Explicit consent for escalation creation
+
+Date: 2026-08-26 · Status: Accepted
+
+Create a durable escalation only when the authenticated customer explicitly requests one through
+the escalation endpoint. The agent may recommend human support when evidence is unavailable or a
+dispute requires judgment, but it must never infer consent or silently create a ticket. This keeps
+handoff creation auditable and avoids unexpected escalations while automatic escalation remains
+outside the focused MVP.
+
+## D-030 — Bounded customer-authored escalation reason
+
+Date: 2026-08-26 · Status: Accepted
+
+Require `POST /v1/conversations/{conversation_id}/escalations` to contain a customer-authored
+`reason`. Trim surrounding whitespace and accept 1–1,000 Unicode characters; invalid input returns
+the stable `422 invalid_escalation_reason` envelope. Conversation history supplies the detailed
+messages and evidence, while the reason records why the customer explicitly wants a human.
+
+## D-031 — Durable and truthful mock-handoff outcome
+
+Date: 2026-08-26 · Status: Accepted
+
+Persist an escalation in `requested` before synchronously attempting the deterministic mock
+handoff. Mock acceptance transitions it to `queued`; rejection or unavailability transitions it to
+`failed`. Return `201 Created` for either outcome because the customer's request remains durable,
+and expose ID, conversation ID, reason, status, creation/update timestamps, and nullable
+`next_step`. A failed handoff provides a safe retry-later instruction. Never report `queued` before
+the mock accepts or discard a failed request.
+
+## D-032 — One active escalation per conversation
+
+Date: 2026-08-26 · Status: Accepted
+
+Allow at most one active escalation in `requested`, `queued`, or `assigned` for a conversation.
+Reject another creation attempt with stable `409 escalation_already_active` and do not create a
+duplicate. A `resolved` or `failed` escalation permits a later request. Enforce this invariant in
+PostgreSQL in addition to service-level handling so concurrent requests cannot create duplicate
+active handoffs.
+
+## D-033 — Immutable typed handoff context
+
+Date: 2026-08-26 · Status: Accepted
+
+At escalation creation, freeze the owned conversation metadata, every message in deterministic
+order, assistant status/uncertainty, and typed plan, bill, or charge evidence references into an
+immutable typed context stored as PostgreSQL `JSONB`. Do not include credentials, raw customer
+identity, or raw snapshot bodies. Later conversation messages must not mutate the submitted
+handoff, preserving an auditable record of exactly what the mock representative received.
+
+## D-034 — Minimal customer-scoped escalation resource
+
+Date: 2026-08-26 · Status: Accepted
+
+Return the same public escalation representation from creation and
+`GET /v1/escalations/{escalation_id}`: ID, conversation ID, reason, status, creation/update
+timestamps, and nullable `next_step`. Keep immutable handoff context internal rather than exposing
+conversation content through the status route. Scope lookup by authenticated customer and return
+the same stable `404 escalation_not_found` response for absent and cross-customer identifiers.
+
+## D-035 — Accepted-by-default runtime mock
+
+Date: 2026-08-26 · Status: Accepted
+
+The runtime deterministic mock accepts every valid handoff and transitions the durable escalation
+from `requested` to `queued`. Exercise provider rejection and unavailability through injected
+deterministic test adapters, not magic customer text or a public failure switch. Validate the
+remaining lifecycle transitions in the domain, but do not automatically progress `queued` records
+to `assigned` or `resolved` in this focused slice.

@@ -14,6 +14,8 @@ from telecom_agent.api.schemas import (
     ConversationHistoryResponse,
     ErrorDetail,
     ErrorResponse,
+    EscalationCreate,
+    EscalationResponse,
     HealthResponse,
     MessageCreate,
     MessageExchangeCreated,
@@ -22,6 +24,7 @@ from telecom_agent.ports.conversations import (
     ConversationStore,
     CustomerIdentityRepository,
 )
+from telecom_agent.ports.escalations import EscalationRepository, HumanHandoff
 from telecom_agent.ports.health import DatabaseHealth
 from telecom_agent.ports.messages import (
     ChargeEvidenceProvider,
@@ -31,8 +34,14 @@ from telecom_agent.ports.messages import (
     MessageExchangeRepository,
 )
 from telecom_agent.services.create_conversation import CreateConversationService
-from telecom_agent.services.errors import ConversationNotFoundError
+from telecom_agent.services.create_escalation import CreateEscalationService
+from telecom_agent.services.errors import (
+    ActiveEscalationExistsError,
+    ConversationNotFoundError,
+    EscalationNotFoundError,
+)
 from telecom_agent.services.get_conversation_history import GetConversationHistoryService
+from telecom_agent.services.get_escalation import GetEscalationService
 from telecom_agent.services.send_support_message import SendSupportMessageService
 
 
@@ -40,6 +49,8 @@ def create_app(
     *,
     customer_identities: CustomerIdentityRepository,
     conversations: ConversationStore,
+    escalations: EscalationRepository,
+    handoff: HumanHandoff,
     database_health: DatabaseHealth,
     current_plans: CurrentPlanProvider,
     answer_generator: CurrentPlanAnswerGenerator,
@@ -52,6 +63,12 @@ def create_app(
     authenticate = build_customer_authentication(customer_identities)
     create_conversation = CreateConversationService(repository=conversations)
     get_conversation_history = GetConversationHistoryService(repository=conversations)
+    create_escalation = CreateEscalationService(
+        histories=conversations,
+        escalations=escalations,
+        handoff=handoff,
+    )
+    get_escalation = GetEscalationService(repository=escalations)
     send_message = SendSupportMessageService(
         conversations=conversations,
         current_plans=current_plans,
@@ -92,6 +109,36 @@ def create_app(
             ).model_dump(),
         )
 
+    @app.exception_handler(EscalationNotFoundError)
+    async def handle_escalation_not_found(
+        _request: Request,
+        _error: EscalationNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code="escalation_not_found",
+                    message="Escalation not found.",
+                )
+            ).model_dump(),
+        )
+
+    @app.exception_handler(ActiveEscalationExistsError)
+    async def handle_active_escalation_exists(
+        _request: Request,
+        _error: ActiveEscalationExistsError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code="escalation_already_active",
+                    message="This conversation already has an active escalation.",
+                )
+            ).model_dump(),
+        )
+
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
         request: Request,
@@ -109,6 +156,21 @@ def create_app(
                     error=ErrorDetail(
                         code="invalid_message",
                         message="Message content must contain 1 to 2000 characters.",
+                    )
+                ).model_dump(),
+            )
+        is_escalation_body_error = (
+            request.method == "POST"
+            and fullmatch(r"/v1/conversations/[^/]+/escalations", request.url.path) is not None
+            and any(item["loc"] and item["loc"][0] == "body" for item in error.errors())
+        )
+        if is_escalation_body_error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content=ErrorResponse(
+                    error=ErrorDetail(
+                        code="invalid_escalation_reason",
+                        message="Escalation reason must contain 1 to 1000 characters.",
                     )
                 ).model_dump(),
             )
@@ -160,6 +222,43 @@ def create_app(
             content=message.content,
         )
         return MessageExchangeCreated.model_validate(exchange, from_attributes=True)
+
+    @app.post(
+        "/v1/conversations/{conversation_id}/escalations",
+        response_model=EscalationResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+            status.HTTP_409_CONFLICT: {"model": ErrorResponse},
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse},
+        },
+    )
+    def create_escalation_route(
+        conversation_id: UUID,
+        request: EscalationCreate,
+        customer_id: Annotated[UUID, Depends(authenticate)],
+    ) -> EscalationResponse:
+        escalation = create_escalation.execute(
+            customer_id=customer_id,
+            conversation_id=conversation_id,
+            reason=request.reason,
+        )
+        return EscalationResponse.model_validate(escalation, from_attributes=True)
+
+    @app.get(
+        "/v1/escalations/{escalation_id}",
+        response_model=EscalationResponse,
+        responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse}},
+    )
+    def get_escalation_route(
+        escalation_id: UUID,
+        customer_id: Annotated[UUID, Depends(authenticate)],
+    ) -> EscalationResponse:
+        escalation = get_escalation.execute(
+            escalation_id=escalation_id,
+            customer_id=customer_id,
+        )
+        return EscalationResponse.model_validate(escalation, from_attributes=True)
 
     @app.get(
         "/health",

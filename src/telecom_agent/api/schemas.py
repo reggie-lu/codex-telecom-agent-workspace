@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, StringConstraints
 
 from telecom_agent.domain.conversations import ConversationStatus
+from telecom_agent.domain.escalations import EscalationStatus
 from telecom_agent.domain.messages import AnswerStatus, EvidenceType, MessageRole
 
 
@@ -74,3 +75,17 @@ class ConversationHistoryResponse(BaseModel):
     status: ConversationStatus
     created_at: datetime
     messages: list[ConversationHistoryMessage]
+
+
+class EscalationCreate(BaseModel):
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+
+
+class EscalationResponse(BaseModel):
+    id: UUID
+    conversation_id: UUID
+    reason: str
+    status: EscalationStatus
+    created_at: datetime
+    updated_at: datetime
+    next_step: str | None

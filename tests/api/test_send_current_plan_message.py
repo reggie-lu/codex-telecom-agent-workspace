@@ -12,7 +12,7 @@ from telecom_agent.domain.charges import ChargeEvidenceDetails, ChargeEvidenceSt
 from telecom_agent.domain.conversations import Conversation, ConversationHistory
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails
-from tests.fakes import DeterministicAnswerGenerator
+from tests.fakes import DeterministicAnswerGenerator, UnusedEscalations, UnusedHandoff
 
 VALID_TOKEN = "synthetic-alice-token"
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -139,6 +139,8 @@ def build_client(
     app = create_app(
         customer_identities=StubCustomerIdentities(),
         conversations=StubConversations(owned),
+        escalations=UnusedEscalations(),
+        handoff=UnusedHandoff(),
         database_health=HealthyDatabase(),
         current_plans=StubCurrentPlans(plan_available),
         latest_bills=StubLatestBills(bill_available),

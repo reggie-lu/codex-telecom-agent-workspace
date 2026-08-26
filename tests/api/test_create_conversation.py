@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
 from telecom_agent.domain.conversations import Conversation, ConversationHistory
-from tests.fakes import DeterministicAnswerGenerator
+from tests.fakes import DeterministicAnswerGenerator, UnusedEscalations, UnusedHandoff
 
 VALID_TOKEN = "synthetic-alice-token"
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -63,6 +63,8 @@ def client(repository: RecordingConversationRepository) -> TestClient:
     app = create_app(
         customer_identities=StubCustomerIdentityRepository(),
         conversations=repository,
+        escalations=UnusedEscalations(),
+        handoff=UnusedHandoff(),
         database_health=HealthyDatabase(),
         current_plans=UnusedCurrentPlans(),
         answer_generator=DeterministicAnswerGenerator(),

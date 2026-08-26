@@ -1,6 +1,9 @@
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from telecom_agent.adapters.postgres.models import (
@@ -8,6 +11,7 @@ from telecom_agent.adapters.postgres.models import (
     BillSnapshotRecord,
     ChargeEvidenceSnapshotRecord,
     ConversationRecord,
+    EscalationRecord,
     MessageBillEvidenceRecord,
     MessageChargeEvidenceRecord,
     MessagePlanEvidenceRecord,
@@ -20,6 +24,7 @@ from telecom_agent.domain.conversations import (
     ConversationHistory,
     ConversationStatus,
 )
+from telecom_agent.domain.escalations import Escalation, EscalationHandoffContext, EscalationStatus
 from telecom_agent.domain.messages import (
     AnswerStatus,
     EvidenceReference,
@@ -28,6 +33,68 @@ from telecom_agent.domain.messages import (
     MessageExchange,
     MessageRole,
 )
+from telecom_agent.services.errors import ActiveEscalationExistsError
+
+
+def _handoff_context_to_json(context: EscalationHandoffContext) -> dict[str, object]:
+    conversation = context.conversation
+    return {
+        "conversation": {
+            "id": str(conversation.id),
+            "status": conversation.status.value,
+            "created_at": conversation.created_at.isoformat(),
+            "messages": [
+                {
+                    "id": str(message.id),
+                    "conversation_id": str(message.conversation_id),
+                    "role": message.role.value,
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat(),
+                    "answer_status": (
+                        message.answer_status.value if message.answer_status is not None else None
+                    ),
+                    "uncertain": message.uncertain,
+                    "evidence": [
+                        {"type": evidence.type.value, "id": str(evidence.id)}
+                        for evidence in message.evidence
+                    ],
+                }
+                for message in conversation.messages
+            ],
+        }
+    }
+
+
+def _handoff_context_from_json(payload: dict[str, Any]) -> EscalationHandoffContext:
+    conversation = payload["conversation"]
+    messages = tuple(
+        Message(
+            id=UUID(item["id"]),
+            conversation_id=UUID(item["conversation_id"]),
+            role=MessageRole(item["role"]),
+            content=item["content"],
+            created_at=datetime.fromisoformat(item["created_at"]),
+            answer_status=(
+                AnswerStatus(item["answer_status"])
+                if item["answer_status"] is not None
+                else None
+            ),
+            uncertain=item["uncertain"],
+            evidence=tuple(
+                EvidenceReference(EvidenceType(evidence["type"]), UUID(evidence["id"]))
+                for evidence in item["evidence"]
+            ),
+        )
+        for item in conversation["messages"]
+    )
+    return EscalationHandoffContext(
+        conversation=ConversationHistory(
+            id=UUID(conversation["id"]),
+            status=ConversationStatus(conversation["status"]),
+            created_at=datetime.fromisoformat(conversation["created_at"]),
+            messages=messages,
+        )
+    )
 
 
 class SqlAlchemyCustomerIdentityRepository:
@@ -264,3 +331,58 @@ class SqlAlchemyMessageExchangeRepository:
                             charge_snapshot_id=evidence.id,
                         )
                     )
+
+
+class SqlAlchemyEscalationRepository:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def add_requested(self, escalation: Escalation) -> None:
+        try:
+            with self._session_factory.begin() as session:
+                session.add(
+                    EscalationRecord(
+                        id=escalation.id,
+                        customer_id=escalation.customer_id,
+                        conversation_id=escalation.conversation_id,
+                        reason=escalation.reason,
+                        status=escalation.status.value,
+                        created_at=escalation.created_at,
+                        updated_at=escalation.updated_at,
+                        next_step=escalation.next_step,
+                        handoff_context=_handoff_context_to_json(escalation.handoff_context),
+                    )
+                )
+        except IntegrityError as error:
+            raise ActiveEscalationExistsError from error
+
+    def update(self, escalation: Escalation) -> None:
+        with self._session_factory.begin() as session:
+            record = session.get(EscalationRecord, escalation.id)
+            if record is None:
+                raise RuntimeError("Escalation disappeared before status update.")
+            record.status = escalation.status.value
+            record.updated_at = escalation.updated_at
+            record.next_step = escalation.next_step
+
+    def get_owned(self, escalation_id: UUID, customer_id: UUID) -> Escalation | None:
+        with self._session_factory() as session:
+            record = session.scalar(
+                select(EscalationRecord).where(
+                    EscalationRecord.id == escalation_id,
+                    EscalationRecord.customer_id == customer_id,
+                )
+            )
+            if record is None:
+                return None
+            return Escalation(
+                id=record.id,
+                customer_id=record.customer_id,
+                conversation_id=record.conversation_id,
+                reason=record.reason,
+                status=EscalationStatus(record.status),
+                created_at=record.created_at.astimezone(UTC),
+                updated_at=record.updated_at.astimezone(UTC),
+                next_step=record.next_step,
+                handoff_context=_handoff_context_from_json(record.handoff_context),
+            )

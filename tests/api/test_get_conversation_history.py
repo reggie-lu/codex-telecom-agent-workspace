@@ -17,7 +17,7 @@ from telecom_agent.domain.messages import (
     Message,
     MessageRole,
 )
-from tests.fakes import DeterministicAnswerGenerator
+from tests.fakes import DeterministicAnswerGenerator, UnusedEscalations, UnusedHandoff
 
 VALID_TOKEN = "synthetic-alice-token"
 CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000001")
@@ -112,6 +112,8 @@ def build_client(stored_history: ConversationHistory | None) -> TestClient:
         create_app(
             customer_identities=StubCustomerIdentities(),
             conversations=StubConversations(stored_history),
+            escalations=UnusedEscalations(),
+            handoff=UnusedHandoff(),
             database_health=HealthyDatabase(),
             current_plans=UnusedCurrentPlans(),
             answer_generator=DeterministicAnswerGenerator(),
