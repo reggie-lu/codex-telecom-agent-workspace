@@ -11,7 +11,8 @@ limitations while the prototype evolves.
 | Foundation | Project structure, typed boundaries, local PostgreSQL, migrations | Implemented |
 | Conversation entry | Authenticate a synthetic customer and create a conversation | Human verified |
 | Local operations | Stable seed, serve, health, and graceful-shutdown workflow | Human verified |
-| Customer support | Messages, plan and bill explanations, unexpected-charge investigation | Agreed, not implemented |
+| Current-plan support | Grounded plan messages with typed evidence and safe limitations | Human verified |
+| Billing support | Latest-bill and unexpected-charge investigation | Agreed, not implemented |
 | Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
 | Evaluation | Routine scoring and release-blocking safety cases | Agreed, not implemented |
 | Packaging | Docker development runtime | Deferred; requires approval |
@@ -102,3 +103,45 @@ Known limitations:
 - Database migrations remain an explicit Alembic command rather than a CLI subcommand or deployment
   job.
 - Docker, Kubernetes, production identity, and production operations remain deferred.
+
+### CP-003 — Grounded Current-Plan Messaging
+
+- Recorded: 2026-08-26 15:12 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `64884c0be8570371c2de0e0b5da6ad6d90d25d68`
+- Commit time: 2026-08-26 15:12:49 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: establishes the first customer-facing support answer with typed evidence,
+privacy-preserving ownership checks, explicit uncertainty, and safe unsupported behavior.
+
+Feature breakdown:
+
+- `POST /v1/conversations/{conversation_id}/messages` persists and returns a user/assistant exchange.
+- Synthetic Alice's current plan is retrieved from a deterministic Synthetic KDDI adapter.
+- The grounded answer references a persisted plan snapshot containing 20 GB, JPY 4,500, and an
+  August 1, 2026 effective date.
+- Missing plan data produces an explicit unavailable answer without invented facts.
+- Unsupported billing questions produce an explicit unsupported answer without invented facts.
+- Cross-customer and missing conversations share the same privacy-preserving `404` response.
+- Migration `20260826_02` adds messages, plan snapshots, and typed evidence links.
+
+Verification evidence:
+
+- Codex verification: 37 pytest tests passed with PostgreSQL integration enabled; Ruff and strict
+  mypy passed.
+- Codex manual verification: the existing database upgraded forward, the grounded and unsupported
+  requests returned their approved `201` contracts, and graceful shutdown passed.
+- Human verification: both deterministic responses were reproduced and confirmed on 2026-08-26.
+- Reproduction steps: see `README.md`, section **Manual API Verification**.
+
+Known limitations:
+
+- Responses are deterministic templates using synthetic mock data; SambaNova `MiniMax-M3` is not
+  called in this checkpoint.
+- The deterministic intent matcher supports current-plan phrasing only.
+- Latest-bill, unexpected-charge, escalation, and conversation-history retrieval remain
+  unimplemented.
+- Docker, Kubernetes, real KDDI data, and production authentication remain deferred.
