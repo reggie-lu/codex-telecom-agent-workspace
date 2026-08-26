@@ -15,7 +15,7 @@ limitations while the prototype evolves.
 | Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
 | Billing support | Latest-bill and unexpected-charge investigation | Human verified for approved synthetic scenarios |
 | Conversation history | Customer-scoped ordered messages and typed evidence references | Human verified |
-| Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
+| Human escalation | Contextual mock escalation and status tracking | Human verified |
 | Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; current-plan gates pass |
 | Packaging | Docker development runtime | Deferred; requires approval |
 | Deployment | Kubernetes or Helm deployment | Deferred; requires approval |
@@ -449,4 +449,62 @@ Known limitations:
 - Contextual human-escalation creation and status tracking remain unimplemented.
 - Customer and account data are synthetic; real KDDI identity, APIs, compliance, and operations
   remain deferred.
+- Docker, Kubernetes, and public deployment remain deferred.
+
+### CP-010 — Contextual Mock Human Escalation
+
+- Recorded: 2026-08-26 20:27 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `5bea0e30160791c21ca22275d56c7b4cd21d87d9`
+- Commit time: 2026-08-26 20:27:12 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: completes the focused MVP handoff boundary so customers can explicitly
+request human support without repeating their conversation or losing truthful request status.
+
+Feature breakdown:
+
+- Authenticated customers explicitly create handoffs with a trimmed 1–1,000-character reason;
+  recommendations never silently open a ticket.
+- Creation freezes owned conversation metadata, ordered messages, assistant status/uncertainty,
+  and typed evidence references into immutable PostgreSQL JSONB context without credentials or raw
+  snapshot bodies.
+- The service persists `requested` before crossing the mock boundary, then records `queued` on
+  acceptance or `failed` with a safe retry step on rejection or provider unavailability.
+- The deterministic runtime mock accepts valid handoffs. Injected test adapters exercise both
+  explicit failure and provider exception behavior.
+- Migration `20260826_05` adds constrained escalation persistence and a partial unique index that
+  permits only one `requested`, `queued`, or `assigned` escalation per conversation.
+- `GET /v1/escalations/{escalation_id}` returns the minimal customer-scoped status resource while
+  keeping internal handoff context private. Missing and cross-customer IDs share one 404 response.
+- The domain validates the approved requested, queued, assigned, resolved, and failed lifecycle;
+  automatic assignment and resolution remain outside this slice.
+
+Verification evidence:
+
+- Codex verification: all 110 pytest tests passed with PostgreSQL integration enabled; Ruff and
+  strict mypy passed across 72 source files.
+- Migration verification: `20260826_05` reached head and `alembic check` reported no new upgrade
+  operations.
+- PostgreSQL integration verified immutable bill-plus-charge context, duplicate prevention,
+  durable failed status, safe retry guidance, and a successful retry after failure.
+- Existing current-plan regression gate: routine 10/10, safety 6/6, release gate pass offline.
+- Human localhost verification: explicit creation and status retrieval for escalation
+  `695fde8f-3d21-4de0-bf87-110438421782` returned the correct conversation and reason,
+  `status: queued`, UTC timestamps, and `next_step: null` on 2026-08-26.
+- Reproduction steps: see `README.md`, section **Manual API Verification**.
+
+Known limitations:
+
+- The handoff provider is deterministic and local; no request reaches an actual KDDI representative
+  or external ticketing system.
+- Runtime requests remain queued. Assignment, resolution, cancellation, reopening, notifications,
+  and background processing are not implemented.
+- Failure behavior is covered by injected automated tests and is not exposed through a public
+  simulation switch.
+- No dedicated escalation evaluation dataset or success metric exists yet.
+- Customer, conversation, and account data are synthetic; production identity, consent,
+  compliance, retention, and operations remain deferred.
 - Docker, Kubernetes, and public deployment remain deferred.
