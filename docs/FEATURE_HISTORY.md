@@ -15,7 +15,7 @@ limitations while the prototype evolves.
 | Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
 | Billing support | Latest-bill and unexpected-charge investigation | Agreed, not implemented |
 | Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
-| Evaluation | Routine scoring and release-blocking safety cases | Agreed, not implemented |
+| Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; live routine gate blocked |
 | Packaging | Docker development runtime | Deferred; requires approval |
 | Deployment | Kubernetes or Helm deployment | Deferred; requires approval |
 
@@ -195,3 +195,54 @@ Known limitations:
 - The output guard is rule-based and does not replace the planned semantic evaluation suite.
 - Model provenance is configured by the server and is not yet returned as public message metadata.
 - Docker, Kubernetes, production identity, and public deployment remain deferred.
+
+### CP-005 — Current-Plan Evaluation Baseline
+
+- Recorded: 2026-08-26 17:30 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `41fe7eab846c3140ad50309178dcbca0859ae98a`
+- Commit time: 2026-08-26 17:30:58 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: establishes reproducible routine-quality and release-blocking safety
+measurement before expanding the agent to billing and unexpected-charge behavior.
+
+Feature breakdown:
+
+- A versioned JSONL dataset defines 10 routine current-plan cases and 6 safety/adversarial cases.
+- Deterministic graders check answer status, uncertainty, typed evidence count, required facts, and
+  prohibited claims without introducing a judge model.
+- Routine and safety scores remain separate: routine requires at least 80%, safety requires 100%,
+  and any safety failure blocks the release gate.
+- Offline mode uses deterministic generators and requires no provider, database, or customer data.
+- Live mode uses configured `MiniMax-M3` for ten eligible cases while preserving deterministic
+  missing-data, unsupported-intent, and injected-output guard scenarios.
+- Per-case diagnostics and process exit codes distinguish a passing run, a failed gate, and missing
+  live configuration.
+- The baseline exposed and fixed terminal-punctuation intent matching while preserving two broader
+  paraphrase gaps as explicit regression cases.
+
+Verification evidence:
+
+- Codex verification: 63 pytest tests passed with PostgreSQL integration enabled; Ruff and strict
+  mypy passed across 51 source files.
+- Codex offline evaluation: routine 8/10 (80%, pass), safety 6/6 (100%, pass), release gate pass.
+- Codex live evaluation: routine 7/10 (70%, fail), safety 6/6 (100%, pass), release gate fail.
+- Human verification: the documented live command reproduced the same three failing routine cases,
+  7/10 routine score, 6/6 safety score, and blocked release gate on 2026-08-26.
+- Reproduction steps: see `README.md`, section **Current-Plan Evaluation**, and `evals/README.md`.
+
+Known limitations:
+
+- This checkpoint verifies the evaluator, not production readiness; the live routine release gate
+  is intentionally recorded as failed.
+- Natural requests phrased as monthly data or mobile service are not recognized by the current
+  deterministic intent matcher.
+- The recurring-charge live case was safely rejected by the current grounding guard and needs
+  targeted diagnosis before changing the prompt or guard.
+- Evaluation covers only current-plan support. Billing, unexpected-charge, history, escalation,
+  and semantic-quality rubrics remain unimplemented.
+- Customer data is synthetic, and Docker, Kubernetes, production identity, and deployment remain
+  deferred.
