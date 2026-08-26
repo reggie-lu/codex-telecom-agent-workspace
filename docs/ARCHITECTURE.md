@@ -57,7 +57,21 @@ Approved latest-bill message contract:
 - The first slice uses deterministic wording and does not call MiniMax-M3.
 - Missing, empty, invalid-period, negative, or non-reconciling billing data returns a safe persisted
   unavailable exchange without amounts or evidence.
-- Unexpected-charge questions remain unsupported until their separately evaluated slice.
+- The latest-bill formatter does not infer causes; diagnostic questions route to the separate
+  unexpected-charge evidence flow below.
+
+Approved unexpected-charge message contract:
+
+- Diagnostic bill questions identify only the approved `roaming_data` line item in this first
+  slice; an ambiguous `this charge` reference asks for a description or amount.
+- A grounded explanation requires a reconciled bill plus confirmed charge evidence whose code,
+  description, amount, currency, and event date agree with that bill.
+- Grounded responses cite both `bill_snapshot` and `charge_snapshot` evidence and state the approved
+  event, service activation, and nonjudgmental next step.
+- Missing causal evidence returns an uncertain limitation with only bill evidence. Stale or
+  conflicting evidence is explicitly flagged and never presented as a current explanation.
+- Refunds, adjustments, dispute decisions, and the actual escalation endpoint remain outside this
+  slice.
 
 ## 3. Technology Stack
 
@@ -104,7 +118,8 @@ retrieved plan and bill data are persisted as snapshots. Raw bearer tokens are n
   retrieval dates, source version, freshness/availability.
 - `Bill`: UUID, customer, period, total, currency, retrieval time, source version, freshness/status.
 - `BillLineItemSnapshot`: UUID, bill snapshot, stable code, description, decimal amount, and order.
-- `Charge`: UUID, bill, description, decimal amount, date, category, supporting details.
+- `ChargeEvidenceSnapshot`: UUID, customer, line-item identity, amount/currency, event date,
+  location, service, trigger, evidence state, retrieval time, and source version.
 - `Conversation`: UUID, customer, status, timestamps.
 - `Message`: UUID, conversation, role, Unicode content, UTC timestamp, typed evidence references,
   uncertainty indicator.
@@ -172,7 +187,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (focused latest-bill summary implemented locally)
+Last updated: 2026-08-26 (focused unexpected-charge investigation implemented locally)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -210,6 +225,13 @@ flowchart TB
     BillSupport --> BillEvidence[Typed bill snapshot evidence]
     BillEvidence --> DB
 
+    Intent --> ChargeInvestigation[Unexpected-charge investigation]
+    ChargeInvestigation --> BillData
+    ChargeInvestigation --> ChargeData[Typed synthetic charge event]
+    ChargeInvestigation --> ChargeEvidence[Bill and charge evidence]
+    ChargeEvidence --> DB
+    ChargeInvestigation -. judgment or missing cause .-> Escalation
+
     Dataset[Versioned current-plan eval dataset] --> Eval[Deterministic grader and gates]
     Eval --> Support
     Eval -. opt-in live cases .-> Model
@@ -223,6 +245,7 @@ flowchart TB
 
     class Client,API,Auth,Health,Developer,CLI,Seed,Create,ConversationService,ConversationRepo,Message,Intent,Support,KDDI,Guard,Model,DB,Local implemented
     class Escalation agreed
+    class ChargeInvestigation,ChargeData,ChargeEvidence implemented
     class BillSupport,BillData,BillEvidence implemented
     class Dataset,Eval implemented
     class Docker,K8s deferred
@@ -290,10 +313,24 @@ POST /v1/conversations/{id}/messages
   -> 201 grounded or unavailable exchange
 ```
 
+Current unexpected-charge flow:
+
+```text
+POST /v1/conversations/{id}/messages
+  -> authenticate customer and verify conversation ownership
+  -> identify the supported roaming item or request clarification
+  -> retrieve and reconcile the latest bill
+  -> retrieve typed causal event evidence
+  -> compare item identity, amount, currency, event period, and freshness state
+  -> deterministically explain only confirmed matching evidence
+  -> atomically persist messages, bill snapshot, charge snapshot, and typed links
+  -> 201 grounded, unavailable/uncertain, or unsupported exchange
+```
+
 ## 13. Open Architecture Questions
 
 - Exact schemas, errors, status codes, and idempotency for endpoints after message submission.
-- Exact tables and constraints for unexpected-charge investigation and escalations.
+- Exact tables and constraints for escalations.
 - Conversation lifecycle beyond creation and escalation.
 - Evaluation datasets and scorers beyond current-plan support, including escalation success.
 - All production KDDI identity, API, compliance, deployment, and operations concerns.

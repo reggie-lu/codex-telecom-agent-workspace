@@ -2,6 +2,7 @@ from typing import Protocol
 from uuid import UUID
 
 from telecom_agent.domain.bills import LatestBillDetails
+from telecom_agent.domain.charges import ChargeEvidenceDetails
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts
 
@@ -20,6 +21,14 @@ class CurrentPlanProvider(Protocol):
 
 class LatestBillProvider(Protocol):
     def get_latest_bill(self, customer_id: UUID) -> LatestBillDetails | None: ...
+
+
+class ChargeEvidenceProvider(Protocol):
+    def get_charge_evidence(
+        self,
+        customer_id: UUID,
+        line_item_code: str,
+    ) -> ChargeEvidenceDetails | None: ...
 
 
 class CurrentPlanAnswerGenerator(Protocol):

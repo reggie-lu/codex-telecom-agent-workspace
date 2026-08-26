@@ -23,6 +23,7 @@ from telecom_agent.ports.conversations import (
 )
 from telecom_agent.ports.health import DatabaseHealth
 from telecom_agent.ports.messages import (
+    ChargeEvidenceProvider,
     CurrentPlanAnswerGenerator,
     CurrentPlanProvider,
     LatestBillProvider,
@@ -44,6 +45,7 @@ def create_app(
     answer_generator: CurrentPlanAnswerGenerator,
     exchanges: MessageExchangeRepository,
     latest_bills: LatestBillProvider | None = None,
+    charge_evidence: ChargeEvidenceProvider | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Telecom Customer-Service Agent", lifespan=lifespan)
@@ -53,6 +55,7 @@ def create_app(
         conversations=conversations,
         current_plans=current_plans,
         latest_bills=latest_bills,
+        charge_evidence=charge_evidence,
         answer_generator=answer_generator,
         exchanges=exchanges,
     )

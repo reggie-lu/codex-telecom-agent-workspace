@@ -213,3 +213,16 @@ that amount. Persist typed bill and line-item snapshots and attach one `bill_sna
 reference. Reject absent, structurally invalid, negative, or non-reconciling billing data with a
 safe unavailable answer containing no billing claims. Do not call MiniMax-M3 or infer why a charge
 occurred in this slice.
+
+## D-027 — Two-source unexpected-charge grounding
+
+Date: 2026-08-26 · Status: Accepted
+
+Investigate only the approved JPY 1,200 international-roaming item in the first charge slice. A
+grounded causal explanation requires both a reconciled latest bill and confirmed synthetic usage
+evidence matching its code, description, amount, currency, and billing period. The approved event
+is mobile data use in the United States on July 18, 2026, which automatically activated the
+Synthetic KDDI Overseas Data Day Pass. Persist both evidence snapshots and links. Missing evidence
+must state that the cause is unknown; stale or conflicting evidence must flag that condition and
+omit the causal claim. Recommend human support for unrecognized usage without deciding a dispute,
+issuing a refund, or implementing escalation in this slice.

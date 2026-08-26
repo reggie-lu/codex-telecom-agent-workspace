@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — latest-bill summary human-verified
+Status: Active implementation — unexpected-charge investigation human-verified
 
 ## Purpose
 
@@ -62,12 +62,16 @@ Apply the database schema:
 uv run alembic upgrade head
 ```
 
+If `telecom-agent serve` is already running while code or migrations change, stop it with `Ctrl-C`
+and restart it after the upgrade so the process loads the new implementation.
+
 On a new database, the migrations finish with output similar to:
 
 ```text
 Running upgrade  -> 20260826_01, create conversations
 Running upgrade 20260826_01 -> 20260826_02, Create messages and plan snapshots.
 Running upgrade 20260826_02 -> 20260826_03, Create bill snapshots, line items, and message evidence.
+Running upgrade 20260826_03 -> 20260826_04, Create charge evidence snapshots and message evidence.
 ```
 
 To stop PostgreSQL later without deleting its data:
@@ -169,19 +173,35 @@ these reconciled line items: monthly mobile service JPY 4,500, domestic calls JP
 international roaming data JPY 1,200, and taxes and fees JPY 630. This path does not call
 MiniMax-M3; it first establishes typed billing retrieval, reconciliation, and evidence persistence.
 
-Verify safe handling of a question outside the implemented slice:
+Investigate the supported unexpected roaming charge:
 
 ```bash
 curl -i -X POST \
   "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/messages" \
   -H 'Authorization: Bearer synthetic-alice-token' \
   -H 'Content-Type: application/json' \
-  --data '{"content":"Why is my bill higher?"}'
+  --data '{"content":"Why is my latest bill higher?"}'
 ```
 
-Expect `201 Created` with `answer_status: "unsupported"`, `uncertain: true`, no evidence, and a
-clear statement that unexpected-charge investigation is not implemented yet. This path does not
-call SambaNova.
+Expect `201 Created` with `answer_status: "grounded"`, `uncertain: false`, and two evidence
+references: one `bill_snapshot` and one `charge_snapshot`. The deterministic answer identifies the
+JPY 1,200 international roaming item, links it to mobile data use in the United States on July 18,
+2026, and states that this activated the Synthetic KDDI Overseas Data Day Pass. It recommends human
+support if the usage is not recognized and does not decide a dispute. This path does not call
+MiniMax-M3.
+
+Verify that unsupported actions remain explicit:
+
+```bash
+curl -i -X POST \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/messages" \
+  -H 'Authorization: Bearer synthetic-alice-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"content":"Can you issue a refund?"}'
+```
+
+Expect `201 Created` with `answer_status: "unsupported"`, `uncertain: true`, and no evidence. The
+agent does not issue refunds or adjustments.
 
 Verify the authentication failure contract separately:
 
@@ -237,6 +257,25 @@ After asking for the latest bill, confirm its persisted snapshot and ordered lin
           LIMIT 1
       )
       ORDER BY i.position;"
+```
+
+After investigating the charge, confirm the persisted causal evidence:
+
+```bash
+/opt/homebrew/bin/psql \
+  -h 127.0.0.1 \
+  -p 55432 \
+  -d telecom_agent \
+  -c "SELECT c.line_item_code, c.amount, c.currency, c.occurred_on,
+             c.location, c.service_name, c.state
+      FROM charge_evidence_snapshots AS c
+      WHERE c.id = (
+          SELECT mce.charge_snapshot_id
+          FROM message_charge_evidence AS mce
+          JOIN messages AS m ON m.id = mce.message_id
+          ORDER BY m.created_at DESC
+          LIMIT 1
+      );"
 ```
 
 To include PostgreSQL integration coverage, create an isolated test database once and set

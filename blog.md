@@ -93,3 +93,25 @@ The human-run API verification returned the same period, total, four line items,
 and bill-snapshot evidence. The latest-bill foundation is therefore complete as a development
 checkpoint; the roaming item is available for the next slice to investigate without yet claiming
 why it appeared.
+
+That investigation now begins with a deliberate distinction: a bill is evidence that an amount was
+charged, not evidence of the event that caused it. The next slice needs a second typed record before
+it can connect the JPY 1,200 roaming line item to a date, place, and activation trigger. Until those
+facts are explicitly approved and available, the honest answer is uncertainty rather than a
+plausible story.
+
+The implementation now joins those two evidence streams without hiding disagreement. A confirmed
+event must match the bill's stable item code, description, amount, currency, and period before the
+agent may say that United States mobile-data use activated the synthetic day pass. If the event is
+missing, it identifies the billed item but says the cause is unknown. If records are stale or
+different, it preserves both snapshots and names the conflict instead of choosing the convenient
+version.
+
+This is still not dispute automation. A customer who does not recognize the usage is directed to
+human support, and the agent states that it cannot decide the dispute. Refunds and adjustments
+remain unsupported, keeping factual investigation separate from judgment and account action.
+
+The independent human run confirmed that boundary in the actual API response: the cause was stated
+only alongside bill and charge snapshots, uncertainty was false for the matching records, and the
+answer ended with human support rather than a verdict. That completes the focused investigation as
+a development checkpoint.

@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from telecom_agent.adapters.postgres.models import (
     BillLineItemRecord,
     BillSnapshotRecord,
+    ChargeEvidenceSnapshotRecord,
     ConversationRecord,
     MessageBillEvidenceRecord,
+    MessageChargeEvidenceRecord,
     MessagePlanEvidenceRecord,
     MessageRecord,
     PlanSnapshotRecord,
@@ -66,9 +68,11 @@ def session_factory(migrated_engine: Engine) -> sessionmaker[Session]:
 @pytest.fixture(autouse=True)
 def clean_records(session_factory: sessionmaker[Session]) -> Iterator[None]:
     with session_factory.begin() as session:
+        session.execute(delete(MessageChargeEvidenceRecord))
         session.execute(delete(MessageBillEvidenceRecord))
         session.execute(delete(MessagePlanEvidenceRecord))
         session.execute(delete(MessageRecord))
+        session.execute(delete(ChargeEvidenceSnapshotRecord))
         session.execute(delete(BillLineItemRecord))
         session.execute(delete(BillSnapshotRecord))
         session.execute(delete(PlanSnapshotRecord))
@@ -89,6 +93,8 @@ def test_migrations_create_message_plan_and_bill_snapshot_schema(
         "bill_snapshots",
         "bill_line_items",
         "message_bill_evidence",
+        "charge_evidence_snapshots",
+        "message_charge_evidence",
     } <= set(inspector.get_table_names())
     message_columns = {column["name"] for column in inspector.get_columns("messages")}
     assert message_columns == {
@@ -268,3 +274,54 @@ def test_postgres_composition_persists_latest_bill_and_line_item_evidence(
     ]
     assert evidence is not None
     assert evidence.bill_snapshot_id == snapshot.id
+
+
+def test_postgres_composition_persists_grounded_charge_investigation_evidence(
+    session_factory: sessionmaker[Session],
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
+    client = TestClient(
+        create_postgres_app(
+            TEST_DATABASE_URL,
+            TEST_SAMBANOVA_SETTINGS,
+            answer_generator=DeterministicAnswerGenerator(),
+        )
+    )
+    headers = {"Authorization": f"Bearer {DEVELOPMENT_CUSTOMER.raw_token}"}
+    conversation_response = client.post("/v1/conversations", headers=headers)
+    conversation_id = UUID(conversation_response.json()["id"])
+
+    response = client.post(
+        f"/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"content": "Why is my latest bill higher?"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assistant_message_id = UUID(body["assistant_message"]["id"])
+    evidence_by_type = {
+        evidence["type"]: UUID(evidence["id"])
+        for evidence in body["assistant_message"]["evidence"]
+    }
+    charge_id = evidence_by_type["charge_snapshot"]
+    with session_factory() as session:
+        charge = session.get(ChargeEvidenceSnapshotRecord, charge_id)
+        evidence = session.scalar(
+            select(MessageChargeEvidenceRecord).where(
+                MessageChargeEvidenceRecord.message_id == assistant_message_id
+            )
+        )
+
+    assert charge is not None
+    assert charge.customer_id == DEVELOPMENT_CUSTOMER.customer_id
+    assert charge.line_item_code == "roaming_data"
+    assert charge.amount == Decimal("1200.00")
+    assert charge.currency == "JPY"
+    assert charge.occurred_on.isoformat() == "2026-07-18"
+    assert charge.location == "United States"
+    assert charge.service_name == "Synthetic KDDI Overseas Data Day Pass"
+    assert charge.state == "confirmed"
+    assert evidence is not None
+    assert evidence.charge_snapshot_id == charge.id

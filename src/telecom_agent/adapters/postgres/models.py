@@ -183,3 +183,46 @@ class MessageBillEvidenceRecord(Base):
         ForeignKey("bill_snapshots.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
+class ChargeEvidenceSnapshotRecord(Base):
+    __tablename__ = "charge_evidence_snapshots"
+    __table_args__ = (
+        CheckConstraint("amount >= 0", name="ck_charge_evidence_nonnegative_amount"),
+        CheckConstraint("char_length(currency) = 3", name="ck_charge_evidence_currency_length"),
+        CheckConstraint("state IN ('confirmed', 'stale')", name="ck_charge_evidence_state"),
+        Index("ix_charge_evidence_customer_id", "customer_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    customer_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("synthetic_customers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    line_item_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
+    location: Mapped[str] = mapped_column(Text, nullable=False)
+    service_name: Mapped[str] = mapped_column(Text, nullable=False)
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_version: Mapped[str] = mapped_column(String(128), nullable=False)
+
+
+class MessageChargeEvidenceRecord(Base):
+    __tablename__ = "message_charge_evidence"
+
+    message_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    charge_snapshot_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("charge_evidence_snapshots.id", ondelete="CASCADE"),
+        primary_key=True,
+    )

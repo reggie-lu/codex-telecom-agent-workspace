@@ -6,9 +6,15 @@ from re import findall
 from uuid import UUID, uuid4
 
 from telecom_agent.domain.bills import (
+    BillLineItem,
     BillLineItemSnapshot,
     BillSnapshot,
     LatestBillDetails,
+)
+from telecom_agent.domain.charges import (
+    ChargeEvidenceDetails,
+    ChargeEvidenceSnapshot,
+    ChargeEvidenceState,
 )
 from telecom_agent.domain.messages import (
     AnswerStatus,
@@ -21,6 +27,7 @@ from telecom_agent.domain.messages import (
 from telecom_agent.domain.plans import GroundedCurrentPlanFacts, PlanSnapshot
 from telecom_agent.ports.messages import (
     AnswerGenerationUnavailableError,
+    ChargeEvidenceProvider,
     ConversationAccessRepository,
     CurrentPlanAnswerGenerator,
     CurrentPlanProvider,
@@ -42,12 +49,14 @@ class SendSupportMessageService:
         answer_generator: CurrentPlanAnswerGenerator,
         exchanges: MessageExchangeRepository,
         latest_bills: LatestBillProvider | None = None,
+        charge_evidence: ChargeEvidenceProvider | None = None,
         id_factory: Callable[[], UUID] = uuid4,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._conversations = conversations
         self._current_plans = current_plans
         self._latest_bills = latest_bills
+        self._charge_evidence = charge_evidence
         self._answer_generator = answer_generator
         self._exchanges = exchanges
         self._id_factory = id_factory
@@ -72,7 +81,16 @@ class SendSupportMessageService:
             created_at=self._clock(),
         )
 
-        if _is_latest_bill_question(normalized_content):
+        if _is_ambiguous_charge_question(normalized_content):
+            exchange = self._charge_clarification_exchange(user_message)
+        elif _is_unexpected_charge_question(normalized_content):
+            bill = (
+                self._latest_bills.get_latest_bill(customer_id)
+                if self._latest_bills is not None
+                else None
+            )
+            exchange = self._unexpected_charge_exchange(user_message, customer_id, bill)
+        elif _is_latest_bill_question(normalized_content):
             bill = (
                 self._latest_bills.get_latest_bill(customer_id)
                 if self._latest_bills is not None
@@ -114,25 +132,7 @@ class SendSupportMessageService:
         if not _is_reconciled_bill(bill):
             return self._bill_inconsistent_exchange(user_message)
 
-        snapshot = BillSnapshot(
-            id=self._id_factory(),
-            customer_id=customer_id,
-            period_start=bill.period_start,
-            period_end=bill.period_end,
-            total=bill.total,
-            currency=bill.currency,
-            line_items=tuple(
-                BillLineItemSnapshot(
-                    id=self._id_factory(),
-                    code=item.code,
-                    description=item.description,
-                    amount=item.amount,
-                )
-                for item in bill.line_items
-            ),
-            retrieved_at=self._clock(),
-            source_version=bill.source_version,
-        )
+        snapshot = self._snapshot_bill(customer_id, bill)
         line_items = "; ".join(
             f"{item.description} — {_format_money(bill.currency, item.amount)}"
             for item in bill.line_items
@@ -154,6 +154,118 @@ class SendSupportMessageService:
             user_message=user_message,
             assistant_message=assistant_message,
             bill_snapshot=snapshot,
+        )
+
+    def _unexpected_charge_exchange(
+        self,
+        user_message: Message,
+        customer_id: UUID,
+        bill: LatestBillDetails | None,
+    ) -> MessageExchange:
+        if bill is None:
+            return self._bill_unavailable_exchange(user_message)
+        if not _is_reconciled_bill(bill):
+            return self._bill_inconsistent_exchange(user_message)
+
+        roaming_item = next(
+            (item for item in bill.line_items if item.code == "roaming_data"),
+            None,
+        )
+        if roaming_item is None:
+            return self._charge_not_identified_exchange(user_message)
+
+        bill_snapshot = self._snapshot_bill(customer_id, bill)
+        details = (
+            self._charge_evidence.get_charge_evidence(customer_id, roaming_item.code)
+            if self._charge_evidence is not None
+            else None
+        )
+        if details is None:
+            return self._missing_charge_evidence_exchange(
+                user_message,
+                bill,
+                roaming_item,
+                bill_snapshot,
+            )
+
+        charge_snapshot = self._snapshot_charge(customer_id, details)
+        evidence = (
+            EvidenceReference(type=EvidenceType.BILL_SNAPSHOT, id=bill_snapshot.id),
+            EvidenceReference(type=EvidenceType.CHARGE_SNAPSHOT, id=charge_snapshot.id),
+        )
+        if not _charge_evidence_matches(bill, roaming_item, details):
+            assistant_message = self._assistant_message(
+                conversation_id=user_message.conversation_id,
+                content=(
+                    "I can’t explain the unexpected charge because the synthetic billing and "
+                    "usage records are conflicting or outdated. Please request human support."
+                ),
+                answer_status=AnswerStatus.UNAVAILABLE,
+                uncertain=True,
+                evidence=evidence,
+            )
+        else:
+            assistant_message = self._assistant_message(
+                conversation_id=user_message.conversation_id,
+                content=(
+                    f"The {_format_money(bill.currency, roaming_item.amount)} "
+                    f"{roaming_item.description} item on your {_format_bill_period(bill)} bill is "
+                    f"linked to mobile data use in the {details.location} on "
+                    f"{_format_date(details.occurred_on)}. That usage automatically activated "
+                    f"the {details.service_name}. If you do not recognize this usage, request "
+                    "human support; I cannot decide a billing dispute."
+                ),
+                answer_status=AnswerStatus.GROUNDED,
+                uncertain=False,
+                evidence=evidence,
+            )
+        return MessageExchange(
+            user_message=user_message,
+            assistant_message=assistant_message,
+            bill_snapshot=bill_snapshot,
+            charge_snapshot=charge_snapshot,
+        )
+
+    def _snapshot_bill(self, customer_id: UUID, bill: LatestBillDetails) -> BillSnapshot:
+        return BillSnapshot(
+            id=self._id_factory(),
+            customer_id=customer_id,
+            period_start=bill.period_start,
+            period_end=bill.period_end,
+            total=bill.total,
+            currency=bill.currency,
+            line_items=tuple(
+                BillLineItemSnapshot(
+                    id=self._id_factory(),
+                    code=item.code,
+                    description=item.description,
+                    amount=item.amount,
+                )
+                for item in bill.line_items
+            ),
+            retrieved_at=self._clock(),
+            source_version=bill.source_version,
+        )
+
+    def _snapshot_charge(
+        self,
+        customer_id: UUID,
+        details: ChargeEvidenceDetails,
+    ) -> ChargeEvidenceSnapshot:
+        return ChargeEvidenceSnapshot(
+            id=self._id_factory(),
+            customer_id=customer_id,
+            line_item_code=details.line_item_code,
+            description=details.description,
+            amount=details.amount,
+            currency=details.currency,
+            occurred_on=details.occurred_on,
+            location=details.location,
+            service_name=details.service_name,
+            trigger=details.trigger,
+            state=details.state,
+            retrieved_at=self._clock(),
+            source_version=details.source_version,
         )
 
     def _generated_exchange(
@@ -242,12 +354,63 @@ class SendSupportMessageService:
         )
         return MessageExchange(user_message, assistant_message)
 
+    def _missing_charge_evidence_exchange(
+        self,
+        user_message: Message,
+        bill: LatestBillDetails,
+        line_item: BillLineItem,
+        bill_snapshot: BillSnapshot,
+    ) -> MessageExchange:
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                f"I found the {_format_money(bill.currency, line_item.amount)} "
+                f"{line_item.description} item on your latest bill, but I can’t determine why "
+                "it was charged because supporting usage data is unavailable. Please request "
+                "human support."
+            ),
+            answer_status=AnswerStatus.UNAVAILABLE,
+            uncertain=True,
+            evidence=(
+                EvidenceReference(type=EvidenceType.BILL_SNAPSHOT, id=bill_snapshot.id),
+            ),
+        )
+        return MessageExchange(
+            user_message=user_message,
+            assistant_message=assistant_message,
+            bill_snapshot=bill_snapshot,
+        )
+
+    def _charge_not_identified_exchange(self, user_message: Message) -> MessageExchange:
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                "I can’t identify an unexpected line item from the synthetic bill. "
+                "Please provide the charge description or request human support."
+            ),
+            answer_status=AnswerStatus.UNAVAILABLE,
+            uncertain=True,
+        )
+        return MessageExchange(user_message, assistant_message)
+
+    def _charge_clarification_exchange(self, user_message: Message) -> MessageExchange:
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                "Which line item do you mean? Please provide its description or amount from your bill."
+            ),
+            answer_status=AnswerStatus.UNAVAILABLE,
+            uncertain=True,
+        )
+        return MessageExchange(user_message, assistant_message)
+
     def _unsupported_exchange(self, user_message: Message) -> MessageExchange:
         assistant_message = self._assistant_message(
             conversation_id=user_message.conversation_id,
             content=(
-                "I can currently explain your current mobile plan or summarize your latest bill. "
-                "Unexpected-charge investigation and other requests are not implemented yet."
+                "I can currently explain your current mobile plan, summarize your latest bill, "
+                "or investigate the supported unexpected roaming charge. Other requests are not "
+                "implemented yet."
             ),
             answer_status=AnswerStatus.UNSUPPORTED,
             uncertain=True,
@@ -297,6 +460,26 @@ def _is_latest_bill_question(content: str) -> bool:
     return "bill" in words and words.isdisjoint(diagnostic_words)
 
 
+def _is_ambiguous_charge_question(content: str) -> bool:
+    normalized = " ".join(findall(r"\w+", content.casefold()))
+    return (
+        "this charge" in normalized
+        and "unexpected" not in normalized
+        and not findall(r"\d", normalized)
+    )
+
+
+def _is_unexpected_charge_question(content: str) -> bool:
+    normalized = " ".join(findall(r"\w+", content.casefold()))
+    words = set(normalized.split())
+    diagnostic_words = {"why", "higher", "unexpected", "wrong", "incorrect"}
+    return (
+        "unexpected" in words
+        or ("bill" in words and not words.isdisjoint(diagnostic_words))
+        or ("charged" in words and bool(findall(r"\d", normalized)))
+    )
+
+
 def _is_reconciled_bill(bill: LatestBillDetails) -> bool:
     return (
         bill.period_start <= bill.period_end
@@ -309,6 +492,25 @@ def _is_reconciled_bill(bill: LatestBillDetails) -> bool:
             for item in bill.line_items
         )
         and sum((item.amount for item in bill.line_items), Decimal()) == bill.total
+    )
+
+
+def _charge_evidence_matches(
+    bill: LatestBillDetails,
+    line_item: BillLineItem,
+    details: ChargeEvidenceDetails,
+) -> bool:
+    return (
+        details.state is ChargeEvidenceState.CONFIRMED
+        and details.line_item_code == line_item.code
+        and details.description == line_item.description
+        and details.amount == line_item.amount
+        and details.currency == bill.currency
+        and bill.period_start <= details.occurred_on <= bill.period_end
+        and bool(details.location.strip())
+        and bool(details.service_name.strip())
+        and bool(details.trigger.strip())
+        and bool(details.source_version.strip())
     )
 
 

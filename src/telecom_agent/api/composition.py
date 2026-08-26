@@ -5,6 +5,9 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from telecom_agent.adapters.kddi_mock.charge_evidence import (
+    SyntheticKddiChargeEvidenceProvider,
+)
 from telecom_agent.adapters.kddi_mock.current_plans import SyntheticKddiCurrentPlanProvider
 from telecom_agent.adapters.kddi_mock.latest_bills import SyntheticKddiLatestBillProvider
 from telecom_agent.adapters.postgres.health import SqlAlchemyDatabaseHealth
@@ -44,6 +47,7 @@ def create_postgres_app(
         database_health=SqlAlchemyDatabaseHealth(engine),
         current_plans=SyntheticKddiCurrentPlanProvider(),
         latest_bills=SyntheticKddiLatestBillProvider(),
+        charge_evidence=SyntheticKddiChargeEvidenceProvider(),
         answer_generator=(
             answer_generator or SambaNovaCurrentPlanAnswerGenerator(sambanova_settings)
         ),

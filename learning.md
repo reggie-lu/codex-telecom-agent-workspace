@@ -114,3 +114,30 @@
   and one `bill_snapshot` reference after migration `20260826_03` reached head.
 - Independent human verification reproduced the exact July bill, grounded status, false uncertainty,
   and typed bill evidence, completing the latest-bill development checkpoint.
+
+## 2026-08-26 — Unexpected-charge investigation started
+
+- A billed line item proves description and amount, not causation. Explaining `why` requires a
+  separate supporting event with human-approved date, location, trigger, and service identity.
+- Start with the known roaming item rather than pretending a deterministic matcher can diagnose
+  every charge category.
+- Missing or conflicting causal evidence must result in an uncertain limitation and next step;
+  presence of the JPY 1,200 item alone is insufficient for a grounded explanation.
+
+## 2026-08-26 — Two-source charge grounding implemented
+
+- A causal explanation is grounded only after bill and event evidence agree on stable item code,
+  description, decimal amount, currency, and event date within the billing period.
+- Missing usage evidence can still safely identify the line item using bill evidence, but the
+  response remains `unavailable` and uncertain about the cause.
+- Stale or mismatched event records are worth persisting as evidence of the conflict; the answer
+  cites both snapshots, flags the condition, and omits the activation explanation.
+- Generic “this charge” language cannot identify a line item without conversation-reference
+  resolution, so the deterministic service asks for a description or amount instead of guessing.
+- The current-plan unsupported safety case moved from a now-supported high-bill question to a
+  refund request; its counts, thresholds, and safety purpose remain unchanged.
+- A localhost listener from the prior human test was still using port 8000. Do not terminate an
+  unowned process automatically; document an explicit stop, migrate, and restart step so the human
+  loads the new charge implementation safely.
+- After restarting, the human independently reproduced the grounded explanation with both typed
+  evidence references and the explicit boundary against deciding a dispute.

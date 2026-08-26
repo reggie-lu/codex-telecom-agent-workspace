@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from telecom_agent.api.app import create_app
 from telecom_agent.domain.bills import BillLineItem, LatestBillDetails
+from telecom_agent.domain.charges import ChargeEvidenceDetails, ChargeEvidenceState
 from telecom_agent.domain.conversations import Conversation
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails
@@ -80,6 +81,33 @@ class StubLatestBills:
         )
 
 
+class StubChargeEvidence:
+    def __init__(self, available: bool = True) -> None:
+        self.available = available
+
+    def get_charge_evidence(
+        self,
+        customer_id: UUID,
+        line_item_code: str,
+    ) -> ChargeEvidenceDetails | None:
+        assert customer_id == CUSTOMER_ID
+        assert line_item_code == "roaming_data"
+        if not self.available:
+            return None
+        return ChargeEvidenceDetails(
+            line_item_code="roaming_data",
+            description="International roaming data",
+            amount=Decimal("1200.00"),
+            currency="JPY",
+            occurred_on=date(2026, 7, 18),
+            location="United States",
+            service_name="Synthetic KDDI Overseas Data Day Pass",
+            trigger="automatically activated when the device used mobile data while roaming",
+            state=ChargeEvidenceState.CONFIRMED,
+            source_version="synthetic-kddi-charge-v1",
+        )
+
+
 class RecordingExchanges:
     def __init__(self) -> None:
         self.saved: list[MessageExchange] = []
@@ -98,6 +126,7 @@ def build_client(
     owned: bool = True,
     plan_available: bool = True,
     bill_available: bool = True,
+    charge_evidence_available: bool = True,
 ) -> tuple[TestClient, RecordingExchanges]:
     exchanges = RecordingExchanges()
     app = create_app(
@@ -106,6 +135,7 @@ def build_client(
         database_health=HealthyDatabase(),
         current_plans=StubCurrentPlans(plan_available),
         latest_bills=StubLatestBills(bill_available),
+        charge_evidence=StubChargeEvidence(charge_evidence_available),
         answer_generator=DeterministicAnswerGenerator(),
         exchanges=exchanges,
     )
@@ -148,6 +178,48 @@ def test_unavailable_latest_bill_returns_safe_persisted_exchange() -> None:
     assert assistant["evidence"] == []
     assert "6,930" not in assistant["content"]
     assert len(exchanges.saved) == 1
+
+
+def test_unexpected_charge_message_returns_bill_and_charge_evidence() -> None:
+    client, exchanges = build_client()
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": "Why is my latest bill higher?"},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "grounded"
+    assert assistant["uncertain"] is False
+    assert [evidence["type"] for evidence in assistant["evidence"]] == [
+        "bill_snapshot",
+        "charge_snapshot",
+    ]
+    assert "JPY 1,200" in assistant["content"]
+    assert "United States" in assistant["content"]
+    assert "July 18, 2026" in assistant["content"]
+    assert exchanges.saved[0].charge_snapshot is not None
+
+
+def test_missing_charge_evidence_returns_uncertain_bill_grounded_limitation() -> None:
+    client, exchanges = build_client(charge_evidence_available=False)
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": "What is the unexpected charge?"},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "unavailable"
+    assert assistant["uncertain"] is True
+    assert [evidence["type"] for evidence in assistant["evidence"]] == ["bill_snapshot"]
+    assert "supporting usage data is unavailable" in assistant["content"]
+    assert "United States" not in assistant["content"]
+    assert exchanges.saved[0].charge_snapshot is None
 
 
 def test_current_plan_message_returns_approved_grounded_exchange_contract() -> None:

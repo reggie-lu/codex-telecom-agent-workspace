@@ -185,7 +185,7 @@ def test_unsupported_question_is_persisted_without_querying_or_inventing_plan_da
     exchange = service.execute(
         customer_id=CUSTOMER_ID,
         conversation_id=CONVERSATION_ID,
-        content="Why is my latest bill higher?",
+        content="Can you issue a refund?",
     )
 
     assert exchange.plan_snapshot is None
@@ -193,8 +193,9 @@ def test_unsupported_question_is_persisted_without_querying_or_inventing_plan_da
     assert exchange.assistant_message.uncertain is True
     assert exchange.assistant_message.evidence == ()
     assert exchange.assistant_message.content == (
-        "I can currently explain your current mobile plan or summarize your latest bill. "
-        "Unexpected-charge investigation and other requests are not implemented yet."
+        "I can currently explain your current mobile plan, summarize your latest bill, or "
+        "investigate the supported unexpected roaming charge. Other requests are not implemented "
+        "yet."
     )
     assert plans.requests == []
     assert generator.requests == []

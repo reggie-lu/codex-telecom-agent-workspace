@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from telecom_agent.adapters.postgres.models import (
     BillLineItemRecord,
     BillSnapshotRecord,
+    ChargeEvidenceSnapshotRecord,
     ConversationRecord,
     MessageBillEvidenceRecord,
+    MessageChargeEvidenceRecord,
     MessagePlanEvidenceRecord,
     MessageRecord,
     PlanSnapshotRecord,
@@ -112,6 +114,26 @@ class SqlAlchemyMessageExchangeRepository:
                     ]
                 )
 
+            if exchange.charge_snapshot is not None:
+                charge = exchange.charge_snapshot
+                session.add(
+                    ChargeEvidenceSnapshotRecord(
+                        id=charge.id,
+                        customer_id=charge.customer_id,
+                        line_item_code=charge.line_item_code,
+                        description=charge.description,
+                        amount=charge.amount,
+                        currency=charge.currency,
+                        occurred_on=charge.occurred_on,
+                        location=charge.location,
+                        service_name=charge.service_name,
+                        trigger=charge.trigger,
+                        state=charge.state.value,
+                        retrieved_at=charge.retrieved_at,
+                        source_version=charge.source_version,
+                    )
+                )
+
             for message in (exchange.user_message, exchange.assistant_message):
                 session.add(
                     MessageRecord(
@@ -143,5 +165,12 @@ class SqlAlchemyMessageExchangeRepository:
                         MessageBillEvidenceRecord(
                             message_id=exchange.assistant_message.id,
                             bill_snapshot_id=evidence.id,
+                        )
+                    )
+                elif evidence.type is EvidenceType.CHARGE_SNAPSHOT:
+                    session.add(
+                        MessageChargeEvidenceRecord(
+                            message_id=exchange.assistant_message.id,
+                            charge_snapshot_id=evidence.id,
                         )
                     )
