@@ -246,3 +246,48 @@ Known limitations:
   and semantic-quality rubrics remain unimplemented.
 - Customer data is synthetic, and Docker, Kubernetes, production identity, and deployment remain
   deferred.
+
+### CP-006 — Current-Plan Quality Remediation
+
+- Recorded: 2026-08-26 17:43 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `c48b3072bfd1cc4d9532714b7f66f5d2dbfa7b89`
+- Commit time: 2026-08-26 17:43:29 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: turns the first current-plan live evaluation from a correctly blocked
+baseline into a fully passing, human-verified quality gate without weakening its safety contract.
+
+Feature breakdown:
+
+- The deterministic intent matcher now recognizes natural questions containing `how much data` or
+  `mobile service`, closing both recorded paraphrase gaps.
+- The recurring-charge failure was traced to MiniMax-M3 returning only the requested price. The
+  prompt now requires all four canonical values exactly once even when one fact is requested.
+- The deterministic grounding guard, 16-case dataset, 80% routine threshold, and 100% safety
+  threshold remain unchanged.
+- Offline and opt-in live evaluation now both pass all 10 routine and all 6 safety cases.
+- Runbooks, the architecture flow, durable decisions, learning notes, and the project blog record
+  the remediation and its verification procedure.
+
+Verification evidence:
+
+- Codex verification: 65 pytest tests passed with PostgreSQL integration enabled; Ruff and strict
+  mypy passed across 51 source files.
+- Codex offline evaluation: routine 10/10 (100%, pass), safety 6/6 (100%, pass), release gate pass.
+- Codex live evaluation: routine 10/10 (100%, pass), safety 6/6 (100%, pass), release gate pass.
+- Human verification: the documented live command independently reproduced 10/10 routine, 6/6
+  safety, and a passing release gate on 2026-08-26.
+- Reproduction steps: see `README.md`, section **Current-Plan Evaluation**, and `evals/README.md`.
+
+Known limitations:
+
+- Evaluation and implementation still cover only current-plan support. Billing, unexpected-charge,
+  roaming, savings, comparisons, history, and human escalation remain unimplemented.
+- Intent matching remains a deliberately narrow deterministic phrase matcher rather than a general
+  semantic classifier.
+- Customer and plan data remain synthetic, and the grounding guard remains rule-based.
+- Docker, Kubernetes, production KDDI identity/data, public deployment, and production operations
+  remain deferred.
