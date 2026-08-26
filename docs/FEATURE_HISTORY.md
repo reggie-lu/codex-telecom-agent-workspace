@@ -16,7 +16,7 @@ limitations while the prototype evolves.
 | Billing support | Latest-bill and unexpected-charge investigation | Human verified for approved synthetic scenarios |
 | Conversation history | Customer-scoped ordered messages and typed evidence references | Human verified |
 | Human escalation | Contextual mock escalation and status tracking | Human verified |
-| Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; current-plan gates pass |
+| Evaluation | Current-plan and cross-feature release-blocking baselines | Human verified; cross-feature gate blocked |
 | Packaging | Docker development runtime | Deferred; requires approval |
 | Deployment | Kubernetes or Helm deployment | Deferred; requires approval |
 
@@ -508,3 +508,54 @@ Known limitations:
 - Customer, conversation, and account data are synthetic; production identity, consent,
   compliance, retention, and operations remain deferred.
 - Docker, Kubernetes, and public deployment remain deferred.
+
+### CP-011 — Cross-Feature MVP Evaluation Baseline
+
+- Recorded: 2026-08-26 21:01 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `f226788e68635bb6ea1d1590aa643d014d6d5a66`
+- Commit time: 2026-08-26 21:01:01 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: gives every focused-MVP feature a deterministic product-level quality
+gate and exposes four natural-language gaps without allowing strong features to hide weak ones.
+
+Feature breakdown:
+
+- `uv run python -m telecom_agent.evaluation.mvp` runs one complete offline 36-case gate with no
+  filters, database, network, `.env`, or model usage.
+- The versioned catalog allocates five routine and four safety cases each to latest bill,
+  unexpected charge, conversation history, and contextual escalation.
+- Every feature has an independent 80% routine gate; all 16 safety cases form a mandatory 100%
+  gate. Any failed feature or safety group blocks the overall release.
+- Deterministic graders exercise real service, authentication, schema, history, and escalation
+  boundaries using evaluation-only repositories and providers.
+- The first baseline preserved four misses: `recent invoice`, `billing period`, direct
+  `roaming charge`, and unrecognized roaming usage.
+- The charge-history fixture was corrected before recording the baseline so one assistant response
+  retains both bill and charge evidence rather than becoming two artificial exchanges.
+
+Verification evidence:
+
+- Codex verification: all 114 pytest tests passed with PostgreSQL integration enabled; Ruff and
+  strict mypy passed across 74 source files.
+- Existing current-plan gate remained 10/10 routine and 6/6 safety.
+- Cross-feature baseline: latest bill 3/5, unexpected charge 3/5, conversation history 5/5,
+  escalation 5/5, safety 16/16, and release gate fail as designed.
+- Human verification independently reproduced every case result and the same scores on
+  2026-08-26.
+- Reproduction steps: see `README.md`, section **Cross-Feature MVP Evaluation**, and
+  `evals/README.md`.
+
+Known limitations:
+
+- The cross-feature release gate is blocked until bill and charge routine intent recognition is
+  remediated against the unchanged dataset.
+- The evaluator is deterministic and offline; it does not assess latency, production security,
+  real KDDI data, or real human-representative delivery.
+- Billing and charge wording remains deterministic; only current-plan wording has a live
+  MiniMax-M3 evaluation path.
+- Plan comparison, roaming-option comparison, savings recommendations, containers, Kubernetes,
+  and public deployment remain deferred.
