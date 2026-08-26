@@ -13,7 +13,7 @@ limitations while the prototype evolves.
 | Local operations | Stable seed, serve, health, and graceful-shutdown workflow | Human verified |
 | Current-plan support | Grounded plan messages with typed evidence and safe limitations | Human verified |
 | Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
-| Billing support | Latest-bill and unexpected-charge investigation | Latest bill human verified; investigation agreed |
+| Billing support | Latest-bill and unexpected-charge investigation | Human verified for approved synthetic scenarios |
 | Human escalation | Contextual mock escalation and status tracking | Agreed, not implemented |
 | Evaluation | Current-plan routine and release-blocking safety baseline | Human verified; current-plan gates pass |
 | Packaging | Docker development runtime | Deferred; requires approval |
@@ -343,4 +343,58 @@ Known limitations:
 - Conversation-history retrieval and human escalation remain unimplemented.
 - Customer and bill data are synthetic; real KDDI identity, APIs, compliance, and operations remain
   deferred.
+- Docker, Kubernetes, and public deployment remain deferred.
+
+### CP-008 — Grounded Unexpected-Charge Investigation
+
+- Recorded: 2026-08-26 18:34 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `c8c415d5d1dbbba14b01efe367d3045403bb808e`
+- Commit time: 2026-08-26 18:34:55 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: completes the first evidence-backed billing investigation while keeping
+factual explanation separate from dispute judgment, refunds, and escalation.
+
+Feature breakdown:
+
+- Diagnostic high-bill and unexpected-charge questions identify the approved JPY 1,200
+  international-roaming item; ambiguous `this charge` references request clarification.
+- A grounded cause requires a reconciled bill and confirmed charge evidence matching stable item
+  code, description, amount, currency, and event date within the billing period.
+- The approved evidence links United States mobile-data use on July 18, 2026 to automatic activation
+  of the Synthetic KDDI Overseas Data Day Pass.
+- Missing evidence identifies only the billed item and states that the cause is unknown. Stale or
+  conflicting evidence is explicitly flagged and never reused as a current explanation.
+- Migration `20260826_04` adds typed charge-evidence snapshots and message links. Bill, charge,
+  messages, and evidence relationships are persisted atomically.
+- The response recommends human support for unrecognized usage and explicitly declines to decide a
+  billing dispute. Refund and adjustment requests remain unsupported.
+- The current-plan unsupported-intent safety case now uses a refund request because high-bill
+  questions became an implemented intent; its size, threshold, and safety purpose are unchanged.
+
+Verification evidence:
+
+- Codex verification: 85 pytest tests passed with PostgreSQL integration enabled; Ruff and strict
+  mypy passed across 59 source files.
+- Migration verification: `20260826_04` upgraded the local database to head, and `alembic check`
+  reported no model/migration drift.
+- Existing current-plan regression gate: routine 10/10, safety 6/6, release gate pass in offline
+  mode with the updated unsupported-refund case.
+- Human localhost verification: after restarting the server, the documented request returned the
+  approved cause, `grounded`, `uncertain: false`, one `bill_snapshot`, one `charge_snapshot`, and the
+  nonjudgmental human-support next step on 2026-08-26.
+- Reproduction steps: see `README.md`, section **Manual API Verification**, including the persisted
+  charge-evidence query.
+
+Known limitations:
+
+- Investigation covers only the approved roaming scenario; it is not a general charge classifier.
+- Wording is deterministic and no dedicated billing/charge evaluation dataset exists yet.
+- The agent recommends human support but the contextual escalation API remains unimplemented.
+- The agent cannot issue refunds, adjustments, plan changes, or dispute decisions.
+- Customer, bill, and usage evidence are synthetic; real KDDI identity, APIs, compliance, and
+  operations remain deferred.
 - Docker, Kubernetes, and public deployment remain deferred.
