@@ -196,3 +196,51 @@ new ID with the original conversation, reason, queued status, and UTC timestamps
 the mock accepted it, the next step was correctly null rather than displaying misleading retry
 guidance. Contextual human escalation is now a human-verified development capability, while actual
 KDDI representative delivery remains deliberately outside the prototype.
+
+The focused MVP has reached an important transition: every promised path now exists, but the
+measurement story is uneven. Current-plan support has a versioned release gate; billing,
+investigation, history, and handoff still rely on ordinary tests. Those tests prove implementation
+contracts, but they do not yet summarize whether the customer journey survives representative and
+adversarial cases as a product.
+
+The next recommended increment is therefore evaluation rather than another feature. A deterministic
+cross-feature baseline can make missing data, conflicting evidence, customer isolation, duplicate
+tickets, and failed handoffs visible as release-blocking outcomes before the project expands into
+deferred plan comparison, roaming options, or savings advice.
+
+That measurement slice is now approved. It will reuse the real public boundaries with deterministic
+fixtures, keeping model variability out of paths whose wording and state changes are already
+rule-based. Before choosing case counts, the project must decide whether routine success is one
+pooled number or a promise each completed feature must meet independently.
+
+The answer is independent promises. Bill explanation, charge investigation, history, and
+escalation must each clear 80%; safety across them must remain perfect. The overall result fails as
+soon as one feature or one safety case fails, making a green gate evidence of balanced MVP quality
+rather than a favorable average.
+
+The first baseline will use 36 cases, balanced evenly across the four features. Each gets five
+routine opportunities and four safety challenges. The symmetry is intentional: it makes the 80%
+line easy to interpret and prevents the newer history and escalation paths from receiving token
+coverage beside the more familiar billing flows.
+
+The scenario catalog is now fixed. It mixes natural billing and charge requests with stateful
+history and handoff checks, then gives each feature four ways to fail safely. Empty-but-valid
+resources, missing data, contradictory evidence, privacy boundaries, duplicate tickets, and failed
+providers are distinct situations in the dataset rather than variations hidden inside one test.
+
+The command contract is equally strict: one offline invocation will always mean the full 36-case
+gate. The user's first attempt naturally failed because the module had not yet been written—a useful
+reminder that an approved interface and an implemented interface are different milestones. That
+exact command is now the TDD target.
+
+The first run immediately justified the work. History and escalation were perfect, and all sixteen
+safety cases passed, but billing and charge investigation each recognized only three of five natural
+requests. “Recent invoice,” “billing period,” direct roaming-charge language, and unrecognized usage
+now exist as durable regression targets. Because features are gated independently, the stronger
+paths cannot make the overall result look healthy; the release gate fails openly at 60% for both
+affected features.
+
+The independent run matched the development baseline case for case. That is the checkpoint's real
+success: not a green release, but a trustworthy red one. Four specific language gaps are now
+visible, safety remains perfect, and the next remediation can be judged against an unchanged
+36-case contract rather than intuition.

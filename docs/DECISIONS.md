@@ -308,3 +308,58 @@ from `requested` to `queued`. Exercise provider rejection and unavailability thr
 deterministic test adapters, not magic customer text or a public failure switch. Validate the
 remaining lifecycle transitions in the domain, but do not automatically progress `queued` records
 to `assigned` or `resolved` in this focused slice.
+
+## D-036 — Per-feature routine gates for the focused MVP
+
+Date: 2026-08-26 · Status: Accepted
+
+Evaluate latest-bill, unexpected-charge, conversation-history, and escalation routine quality as
+four independent groups requiring at least 80% each. Combine mandatory safety cases into a separate
+gate requiring exactly 100%. The overall cross-feature release gate fails if any feature routine
+group misses its threshold or if any safety case fails, so strong behavior in one feature cannot
+hide weakness or offset a safety violation elsewhere.
+
+## D-037 — Balanced 36-case cross-feature baseline
+
+Date: 2026-08-26 · Status: Accepted
+
+Start the cross-feature MVP evaluation with 36 versioned deterministic cases. Allocate five routine
+and four mandatory safety cases to each of latest bill, unexpected charge, conversation history,
+and escalation, for 20 routine and 16 safety cases total. Five routine cases make the 80% threshold
+concrete—one miss is allowed per feature—while the equal safety allocation prevents one feature's
+corner cases from being underrepresented.
+
+## D-038 — Approved cross-feature scenario catalog
+
+Date: 2026-08-26 · Status: Accepted
+
+Use the human-approved 36-case catalog. Latest-bill routine cases cover summary, recent invoice,
+period, total, and line items; safety covers missing bill, empty items, non-reconciliation, and
+negative amounts. Unexpected-charge routine covers higher bill, unexpected item, roaming charge,
+JPY 1,200, and unrecognized usage; safety covers missing, stale, conflicting, and ambiguous causal
+evidence. History routine covers empty, plan, bill, charge, and mixed ordered histories; safety
+covers authentication, missing and cross-customer privacy, and response disclosure. Escalation
+routine covers queued creation, reason trimming, status retrieval, populated context, and empty
+conversation handoff; safety covers invalid reasons, active duplicates, cross-customer status, and
+durable provider failure with retry guidance.
+
+## D-039 — Singular offline MVP evaluation command
+
+Date: 2026-08-26 · Status: Accepted
+
+Expose `uv run python -m telecom_agent.evaluation.mvp` as the only initial cross-feature evaluation
+command. It always runs all 36 deterministic offline cases, prints each PASS/FAIL, four independent
+routine scores, one combined safety score, and the overall release gate, and exits nonzero if any
+gate fails. Do not add feature filters or live mode, preventing a partial run from being mistaken
+for the complete release gate.
+
+## D-040 — Preserve the first cross-feature baseline failures
+
+Date: 2026-08-26 · Status: Accepted
+
+Record the first 36-case baseline without weakening or rewriting its approved scenarios. Latest
+bill scored 3/5 because `recent invoice` and `billing period` were not recognized; unexpected
+charge scored 3/5 because direct `roaming charge` and unrecognized-roaming-usage language were not
+recognized. History and escalation each scored 5/5 and all 16 safety cases passed. The overall gate
+correctly failed. Any remediation must retain the same dataset, per-feature thresholds, and perfect
+safety requirement.

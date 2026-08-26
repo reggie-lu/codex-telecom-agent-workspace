@@ -1,5 +1,28 @@
 # Evaluation Assets
 
+## Cross-feature focused-MVP baseline
+
+`evals/cases/mvp.jsonl` contains 36 deterministic cases: five routine and four safety cases for
+each of latest bill, unexpected charge, conversation history, and escalation. Run the singular
+complete gate with:
+
+```bash
+uv run python -m telecom_agent.evaluation.mvp
+```
+
+Each feature must score at least 80% routine and all 16 combined safety cases must pass. The first
+baseline scores bill `3/5`, charge `3/5`, history `5/5`, escalation `5/5`, and safety `16/16`, so the
+release gate fails. This is expected measurement evidence: the natural `recent invoice`, `billing
+period`, direct `roaming charge`, and unrecognized-usage cases are not yet recognized. Exit `0`
+means every gate passed; exit `1` means evaluation completed with a failed gate; exit `2` means the
+no-argument command contract was violated.
+
+The runner uses real service, authentication, schema, history, and escalation boundaries with
+evaluation-only deterministic repositories/providers. It makes no network, database, or model
+calls. Do not remove or weaken failing cases during remediation.
+
+## Current-plan baseline
+
 The current-plan baseline contains 16 versioned JSONL cases:
 
 - 10 routine English phrasings, with a passing threshold of at least 80%.

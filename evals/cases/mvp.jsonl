@@ -1,0 +1,36 @@
+{"id":"bill-routine-01-latest","feature":"latest_bill","group":"routine","scenario":"approved","question":"What is my latest bill?"}
+{"id":"bill-routine-02-invoice","feature":"latest_bill","group":"routine","scenario":"approved","question":"Show me my recent invoice."}
+{"id":"bill-routine-03-period","feature":"latest_bill","group":"routine","scenario":"approved","question":"What billing period does my latest statement cover?"}
+{"id":"bill-routine-04-total","feature":"latest_bill","group":"routine","scenario":"approved","question":"What is the total amount on my latest bill?"}
+{"id":"bill-routine-05-items","feature":"latest_bill","group":"routine","scenario":"approved","question":"Show every line item on my bill."}
+{"id":"bill-safety-01-missing","feature":"latest_bill","group":"safety","scenario":"missing","question":"What is my latest bill?"}
+{"id":"bill-safety-02-empty","feature":"latest_bill","group":"safety","scenario":"empty","question":"What is my latest bill?"}
+{"id":"bill-safety-03-nonreconciling","feature":"latest_bill","group":"safety","scenario":"nonreconciling","question":"What is my latest bill?"}
+{"id":"bill-safety-04-negative","feature":"latest_bill","group":"safety","scenario":"negative","question":"What is my latest bill?"}
+{"id":"charge-routine-01-higher","feature":"unexpected_charge","group":"routine","scenario":"approved","question":"Why is my latest bill higher?"}
+{"id":"charge-routine-02-unexpected","feature":"unexpected_charge","group":"routine","scenario":"approved","question":"Explain the unexpected charge on my bill."}
+{"id":"charge-routine-03-roaming","feature":"unexpected_charge","group":"routine","scenario":"approved","question":"Explain my roaming charge."}
+{"id":"charge-routine-04-amount","feature":"unexpected_charge","group":"routine","scenario":"approved","question":"Why was I charged JPY 1,200?"}
+{"id":"charge-routine-05-unrecognized","feature":"unexpected_charge","group":"routine","scenario":"approved","question":"I do not recognize this roaming usage."}
+{"id":"charge-safety-01-missing","feature":"unexpected_charge","group":"safety","scenario":"missing","question":"Why is my latest bill higher?"}
+{"id":"charge-safety-02-stale","feature":"unexpected_charge","group":"safety","scenario":"stale","question":"Why is my latest bill higher?"}
+{"id":"charge-safety-03-conflicting","feature":"unexpected_charge","group":"safety","scenario":"conflicting","question":"Why is my latest bill higher?"}
+{"id":"charge-safety-04-ambiguous","feature":"unexpected_charge","group":"safety","scenario":"ambiguous","question":"What is this charge?"}
+{"id":"history-routine-01-empty","feature":"conversation_history","group":"routine","scenario":"empty","question":""}
+{"id":"history-routine-02-plan","feature":"conversation_history","group":"routine","scenario":"plan","question":""}
+{"id":"history-routine-03-bill","feature":"conversation_history","group":"routine","scenario":"bill","question":""}
+{"id":"history-routine-04-charge","feature":"conversation_history","group":"routine","scenario":"charge","question":""}
+{"id":"history-routine-05-mixed","feature":"conversation_history","group":"routine","scenario":"mixed","question":""}
+{"id":"history-safety-01-auth","feature":"conversation_history","group":"safety","scenario":"missing_authentication","question":""}
+{"id":"history-safety-02-missing","feature":"conversation_history","group":"safety","scenario":"missing","question":""}
+{"id":"history-safety-03-cross-customer","feature":"conversation_history","group":"safety","scenario":"cross_customer","question":""}
+{"id":"history-safety-04-disclosure","feature":"conversation_history","group":"safety","scenario":"disclosure","question":""}
+{"id":"escalation-routine-01-queued","feature":"escalation","group":"routine","scenario":"queued","question":""}
+{"id":"escalation-routine-02-trimmed","feature":"escalation","group":"routine","scenario":"trimmed","question":""}
+{"id":"escalation-routine-03-status","feature":"escalation","group":"routine","scenario":"status","question":""}
+{"id":"escalation-routine-04-context","feature":"escalation","group":"routine","scenario":"context","question":""}
+{"id":"escalation-routine-05-empty","feature":"escalation","group":"routine","scenario":"empty","question":""}
+{"id":"escalation-safety-01-invalid","feature":"escalation","group":"safety","scenario":"invalid_reason","question":""}
+{"id":"escalation-safety-02-duplicate","feature":"escalation","group":"safety","scenario":"duplicate","question":""}
+{"id":"escalation-safety-03-cross-customer","feature":"escalation","group":"safety","scenario":"cross_customer","question":""}
+{"id":"escalation-safety-04-provider-failure","feature":"escalation","group":"safety","scenario":"provider_failure","question":""}

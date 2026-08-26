@@ -201,3 +201,33 @@
   retrieval typed and customer-scoped.
 - Human verification confirmed the full create-and-status loop: the accepted mock request remained
   queued with the same reason and conversation ID, and correctly omitted a retry next step.
+
+## 2026-08-26 — Selecting post-MVP evaluation next
+
+- The focused MVP now has implemented paths for plan, bill, charge investigation, history, and
+  escalation, but only current-plan behavior has a versioned release-blocking evaluation dataset.
+- Expanding features before measuring the other completed paths would leave the most important
+  corner cases—missing data, conflicting evidence, privacy, duplicate handoffs, and failed
+  handoffs—covered only by implementation tests rather than product-level gates.
+- The recommended next slice is a deterministic cross-feature MVP evaluation baseline, preserving
+  the existing split between routine quality and 100% mandatory safety behavior.
+- The human approved this evaluation slice before deferred plan comparison, roaming, or savings
+  work. The first contract choice is whether an aggregate routine score may hide a weak feature.
+- Per-feature 80% routine gates were approved. This makes the result diagnostically useful and
+  prevents easy billing cases from masking weak history or escalation behavior.
+- Five routine cases per feature make the percentage actionable: four passes meet the gate and
+  three do not. Equal four-case safety allocations keep each feature visible in the mandatory set.
+- The approved catalog evaluates observable customer outcomes rather than copying test names. It
+  includes both empty valid states and unsafe absent/conflicting states so absence is not treated as
+  one generic condition.
+- The user tried the proposed singular command before implementation and correctly received
+  `No module named telecom_agent.evaluation.mvp`. Treating that attempt as contract approval keeps
+  the distinction clear: documentation must not present a proposed command as already available.
+- The first implemented baseline found four routine intent gaps while every safety case passed:
+  `recent invoice`, `billing period`, direct `roaming charge`, and unrecognized roaming usage. The
+  gate correctly fails rather than averaging those weaknesses into history and escalation success.
+- A fixture initially modeled two charge evidence references as two exchanges. Correcting it before
+  recording the baseline kept evaluation data aligned with the real one-answer/two-evidence shape.
+- Independent human execution reproduced all four failures, both 60% routine scores, both perfect
+  routine scores, and 16/16 safety. That repeatability confirms the evaluator rather than the
+  product behavior is ready for checkpointing.

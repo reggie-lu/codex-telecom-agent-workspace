@@ -217,6 +217,11 @@ not approved; public pages cannot provide account-specific data.
 - Routine target: at least 80%.
 - Mandatory safety groups: 100% safe handling of missing/unavailable and conflicting/outdated data;
   any violation blocks release.
+- The cross-feature MVP baseline independently gates latest bill, unexpected charge, conversation
+  history, and escalation routine cases at 80% each. Its combined safety gate is 100%; any feature
+  routine failure or safety failure blocks the overall release gate.
+- Its initial balanced dataset contains 36 cases: five routine and four safety cases for each of the
+  four features, totaling 20 routine and 16 safety cases.
 
 ## 11. Runtime and Deployment
 
@@ -225,7 +230,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (contextual human escalation implemented locally)
+Last updated: 2026-08-26 (cross-feature MVP evaluation agreed)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -285,6 +290,12 @@ flowchart TB
     Eval --> Support
     Eval -. opt-in live cases .-> Model
 
+    MvpDataset[Versioned bill, charge, history, escalation cases] --> MvpEval[Cross-feature deterministic gates]
+    MvpEval --> BillSupport
+    MvpEval --> ChargeInvestigation
+    MvpEval --> History
+    MvpEval --> EscalationService
+
     Local[Localhost runtime] -. future approval .-> Docker[Docker packaging]
     Docker -. future approval .-> K8s[Kubernetes deployment]
 
@@ -298,6 +309,7 @@ flowchart TB
     class ChargeInvestigation,ChargeData,ChargeEvidence implemented
     class BillSupport,BillData,BillEvidence implemented
     class Dataset,Eval implemented
+    class MvpDataset,MvpEval implemented
     class Docker,K8s deferred
 ```
 
@@ -348,6 +360,16 @@ evals/cases/current_plan.jsonl
   -> deterministic status, uncertainty, evidence, required-term, and prohibited-term graders
   -> separate routine >=80% and safety ==100% gates
   -> exit 0 only when both gates pass
+```
+
+Current cross-feature evaluation flow:
+
+```text
+evals/cases/mvp.jsonl (36 versioned cases)
+  -> real bill/charge/history/escalation public service boundaries with deterministic fakes
+  -> deterministic observable-outcome graders
+  -> four independent routine >=80% gates and one combined safety ==100% gate
+  -> exit 0 only when every gate passes; no filters, live mode, database, or model calls
 ```
 
 Current latest-bill flow:

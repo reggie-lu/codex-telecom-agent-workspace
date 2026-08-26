@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — contextual human escalation human-verified
+Status: Active implementation — cross-feature MVP baseline human-verified; release gate blocked
 
 ## Purpose
 
@@ -389,6 +389,20 @@ either a quality/safety gate failed or configuration was incomplete; review the 
 failures.
 Expect routine `10/10 (100.0%)`, safety `6/6 (100.0%)`, and `Release gate: PASS`. See
 `evals/README.md` for the dataset contract, historical baseline, and exit-code meanings.
+
+## Cross-Feature MVP Evaluation
+
+Run the complete deterministic 36-case bill, charge, history, and escalation gate:
+
+```bash
+uv run python -m telecom_agent.evaluation.mvp
+```
+
+The command uses no database, network, SambaNova key, or live model. The first baseline currently
+passes history routine `5/5`, escalation routine `5/5`, and safety `16/16`, but scores latest bill
+`3/5` and unexpected charge `3/5`; therefore it intentionally exits `1` with `Release gate: FAIL`.
+The four misses are the approved `recent invoice`, `billing period`, direct `roaming charge`, and
+unrecognized-roaming-usage phrasings. Preserve the dataset for the next quality-remediation slice.
 
 ## Project Documentation
 
