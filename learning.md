@@ -231,3 +231,30 @@
 - Independent human execution reproduced all four failures, both 60% routine scores, both perfect
   routine scores, and 16/16 safety. That repeatability confirms the evaluator rather than the
   product behavior is ready for checkpointing.
+
+## 2026-08-26 — Cross-feature remediation approved
+
+- All four misses happen at deterministic intent selection, before bill or charge retrieval. The
+  factual grounding paths and safety cases do not need to change.
+- The approved fix is deliberately lexical and narrow: invoice/period language for bill summaries,
+  and direct or unrecognized roaming language for charge investigation.
+- Ambiguous `this charge` must retain higher routing precedence so expanded charge recognition does
+  not convert a clarification case into a guessed explanation.
+
+## 2026-08-26 — Cross-feature remediation implemented locally
+
+- Four public-API regression tests failed as `unsupported` before the matcher change and passed
+  afterward, confirming the failure and fix remained at intent selection.
+- Adding only invoice/statement and roaming-recognition vocabulary raised bill and charge routine
+  scores from 3/5 to 5/5 while history, escalation, and all 16 safety cases stayed perfect.
+- The complete 118-test PostgreSQL suite, Ruff, strict mypy, and the 16-case current-plan gate also
+  pass. The next evidence required is an independent human run of the unchanged MVP command.
+
+## 2026-08-27 — Cross-feature remediation human-verified
+
+- The independent command reproduced 20/20 routine passes across four separately gated features
+  and 16/16 safety passes, confirming the local result without special flags or hidden setup.
+- The comparison is valid because the 36 cases, thresholds, evidence expectations, and graders are
+  unchanged from the human-verified red baseline.
+- This closes the focused quality gap, but it remains a development checkpoint: real KDDI data,
+  production identity, real representative delivery, and deployment remain outside the evidence.

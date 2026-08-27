@@ -230,7 +230,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-26 (cross-feature MVP evaluation agreed)
+Last updated: 2026-08-27 (cross-feature intent remediation human-verified)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -254,7 +254,7 @@ flowchart TB
     ConversationRepo --> DB[(Local PostgreSQL)]
 
     Auth --> Message[Send support message]
-    Message --> Intent[Deterministic current-plan intent matching]
+    Message --> Intent[Deterministic plan, bill, and charge intent matching]
     Intent --> Support[Grounded plan orchestration]
     Support --> KDDI[Synthetic KDDI current-plan data]
     Support --> Model[SambaNova MiniMax-M3]
@@ -371,6 +371,11 @@ evals/cases/mvp.jsonl (36 versioned cases)
   -> four independent routine >=80% gates and one combined safety ==100% gate
   -> exit 0 only when every gate passes; no filters, live mode, database, or model calls
 ```
+
+The router recognizes the preserved regression language for recent invoices, billing periods or
+latest statements, direct roaming charges, and unrecognized roaming usage. Ambiguous `this charge`
+requests retain higher-priority clarification routing. The unchanged 36-case gate passes locally;
+independent human verification reproduced the pass on 2026-08-27.
 
 Current latest-bill flow:
 

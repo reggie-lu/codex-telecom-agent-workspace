@@ -171,6 +171,55 @@ def test_latest_bill_message_returns_grounded_bill_evidence() -> None:
     assert exchanges.saved[0].bill_snapshot is not None
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Show me my recent invoice.",
+        "What billing period does my latest statement cover?",
+    ],
+)
+def test_natural_bill_phrasings_route_to_grounded_bill_summary(content: str) -> None:
+    client, _exchanges = build_client()
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": content},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "grounded"
+    assert [item["type"] for item in assistant["evidence"]] == ["bill_snapshot"]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Explain my roaming charge.",
+        "I do not recognize this roaming usage.",
+    ],
+)
+def test_natural_roaming_phrasings_route_to_grounded_charge_investigation(
+    content: str,
+) -> None:
+    client, _exchanges = build_client()
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": content},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "grounded"
+    assert [item["type"] for item in assistant["evidence"]] == [
+        "bill_snapshot",
+        "charge_snapshot",
+    ]
+
+
 def test_unavailable_latest_bill_returns_safe_persisted_exchange() -> None:
     client, exchanges = build_client(bill_available=False)
 

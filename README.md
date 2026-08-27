@@ -1,6 +1,6 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — cross-feature MVP baseline human-verified; release gate blocked
+Status: Active implementation — cross-feature intent remediation human-verified; release gate passes
 
 ## Purpose
 
@@ -398,11 +398,12 @@ Run the complete deterministic 36-case bill, charge, history, and escalation gat
 uv run python -m telecom_agent.evaluation.mvp
 ```
 
-The command uses no database, network, SambaNova key, or live model. The first baseline currently
-passes history routine `5/5`, escalation routine `5/5`, and safety `16/16`, but scores latest bill
-`3/5` and unexpected charge `3/5`; therefore it intentionally exits `1` with `Release gate: FAIL`.
-The four misses are the approved `recent invoice`, `billing period`, direct `roaming charge`, and
-unrecognized-roaming-usage phrasings. Preserve the dataset for the next quality-remediation slice.
+The command uses no database, network, SambaNova key, or live model. The preserved first baseline
+scored latest bill `3/5`, unexpected charge `3/5`, history `5/5`, escalation `5/5`, and safety
+`16/16`, so it correctly failed. The narrow intent remediation now recognizes `recent invoice`,
+`billing period`/latest-statement, direct `roaming charge`, and unrecognized-roaming-usage language.
+The unchanged gate now reports all four routine groups at `5/5`, safety at `16/16`, and
+`Release gate: PASS`. Independent human verification reproduced this result on 2026-08-27.
 
 ## Project Documentation
 

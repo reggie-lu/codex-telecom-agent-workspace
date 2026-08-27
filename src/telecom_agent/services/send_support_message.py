@@ -454,7 +454,13 @@ def _is_latest_bill_question(content: str) -> bool:
     normalized = " ".join(findall(r"\w+", content.casefold()))
     words = set(normalized.split())
     diagnostic_words = {"why", "higher", "unexpected", "wrong", "incorrect"}
-    return "bill" in words and words.isdisjoint(diagnostic_words)
+    bill_reference = (
+        "bill" in words
+        or "invoice" in words
+        or "billing period" in normalized
+        or "latest statement" in normalized
+    )
+    return bill_reference and words.isdisjoint(diagnostic_words)
 
 
 def _is_ambiguous_charge_question(content: str) -> bool:
@@ -474,6 +480,8 @@ def _is_unexpected_charge_question(content: str) -> bool:
         "unexpected" in words
         or ("bill" in words and not words.isdisjoint(diagnostic_words))
         or ("charged" in words and bool(findall(r"\d", normalized)))
+        or "roaming charge" in normalized
+        or ("roaming" in words and "recognize" in words)
     )
 
 

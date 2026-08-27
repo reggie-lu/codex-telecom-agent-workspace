@@ -363,3 +363,21 @@ charge scored 3/5 because direct `roaming charge` and unrecognized-roaming-usage
 recognized. History and escalation each scored 5/5 and all 16 safety cases passed. The overall gate
 correctly failed. Any remediation must retain the same dataset, per-feature thresholds, and perfect
 safety requirement.
+
+## D-041 — Narrow cross-feature intent remediation
+
+Date: 2026-08-26 · Status: Accepted
+
+Remediate only the four CP-011 routine gaps: `recent invoice`, `billing period` or latest-statement
+language, direct `roaming charge`, and unrecognized roaming usage. Extend the existing deterministic
+intent predicates without changing the 36-case dataset, graders, feature thresholds, or 100%
+safety gate. Preserve ambiguous-charge clarification and all grounding/evidence requirements.
+
+## D-042 — Keep intent remediation deterministic and evidence-neutral
+
+Date: 2026-08-26 · Status: Accepted
+
+Implement the four approved language additions inside the existing normalized intent predicates.
+Do not alter bill or charge retrieval, canonical answer formatting, evidence construction, or
+persistence. Keep ambiguous `this charge` routing ahead of charge investigation. This makes the
+unchanged 36-case gate green without weakening its graders or introducing model-dependent routing.

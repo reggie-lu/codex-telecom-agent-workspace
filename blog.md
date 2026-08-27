@@ -244,3 +244,24 @@ The independent run matched the development baseline case for case. That is the 
 success: not a green release, but a trustworthy red one. Four specific language gaps are now
 visible, safety remains perfect, and the next remediation can be judged against an unchanged
 36-case contract rather than intuition.
+
+The remediation is now approved with a deliberately small blast radius. The four failures all
+occurred before evidence retrieval, so the answer formatters, snapshots, and safety rules are not
+the problem. The next change teaches the deterministic router those four natural expressions while
+keeping ambiguous “this charge” requests on the clarification path and leaving the evaluation
+contract untouched.
+
+That narrow change is now implemented locally. Four focused API tests first reproduced the exact
+unsupported outcomes, then turned green after the router learned invoice and latest-statement
+language plus direct and unrecognized roaming language. No answer facts, evidence rules, dataset
+cases, or thresholds changed.
+
+The result is the comparison the baseline was designed to make trustworthy: latest bill and
+unexpected charge moved from 3/5 to 5/5, history and escalation remained 5/5, and safety remained
+16/16. The broader 118-test suite, lint, strict typing, and the separate current-plan gate also pass.
+The final checkpoint still waits for the human to reproduce the singular cross-feature command.
+
+The independent run on the following day reproduced every green result: five of five routine cases
+for each feature and all sixteen safety cases. That closes the loop from trustworthy red baseline
+to trustworthy green remediation using the same command and the same versioned contract. It is a
+human-verified development checkpoint, not evidence about real KDDI systems or production traffic.
