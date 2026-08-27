@@ -16,7 +16,7 @@ limitations while the prototype evolves.
 | Billing support | Latest-bill and unexpected-charge investigation | Human verified for approved synthetic scenarios |
 | Conversation history | Customer-scoped ordered messages and typed evidence references | Human verified |
 | Human escalation | Contextual mock escalation and status tracking | Human verified |
-| Evaluation | Current-plan and cross-feature release-blocking baselines | Human verified; cross-feature gate blocked |
+| Evaluation | Current-plan and cross-feature release-blocking gates | Human verified; all current gates pass |
 | Packaging | Docker development runtime | Deferred; requires approval |
 | Deployment | Kubernetes or Helm deployment | Deferred; requires approval |
 
@@ -553,6 +553,53 @@ Known limitations:
 
 - The cross-feature release gate is blocked until bill and charge routine intent recognition is
   remediated against the unchanged dataset.
+- The evaluator is deterministic and offline; it does not assess latency, production security,
+  real KDDI data, or real human-representative delivery.
+- Billing and charge wording remains deterministic; only current-plan wording has a live
+  MiniMax-M3 evaluation path.
+- Plan comparison, roaming-option comparison, savings recommendations, containers, Kubernetes,
+  and public deployment remain deferred.
+
+### CP-012 — Cross-Feature Intent Quality Remediation
+
+- Recorded: 2026-08-27 10:07 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `4caa280ef4c43754e8f7ec5bfab515357416960b`
+- Commit time: 2026-08-27 10:07:03 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: closes the four language gaps exposed by CP-011 and makes every focused-
+MVP routine and safety gate pass without changing the versioned evaluation contract.
+
+Feature breakdown:
+
+- Latest-bill intent now recognizes recent-invoice and billing-period/latest-statement language.
+- Unexpected-charge intent now recognizes direct roaming-charge questions and unrecognized roaming
+  usage.
+- Ambiguous `this charge` requests retain higher-priority clarification instead of receiving a
+  guessed causal explanation.
+- The change is limited to normalized deterministic intent predicates; retrieval, answer facts,
+  typed evidence, persistence, datasets, graders, and thresholds are unchanged.
+- Four public-API regression cases preserve the newly recognized language outside the evaluator.
+
+Verification evidence:
+
+- Codex verification: all 118 pytest tests passed with PostgreSQL integration enabled; Ruff and
+  strict mypy passed across 74 source files.
+- Existing current-plan gate remained 10/10 routine and 6/6 safety with a passing release gate.
+- The unchanged cross-feature gate scored latest bill 5/5, unexpected charge 5/5, conversation
+  history 5/5, contextual escalation 5/5, and safety 16/16.
+- Human verification independently reproduced all 36 passing cases and `Release gate: PASS` on
+  2026-08-27.
+- Reproduction steps: see `README.md`, section **Cross-Feature MVP Evaluation**, and
+  `evals/README.md`.
+
+Known limitations:
+
+- Intent recognition remains deterministic and English-only; it is not a general semantic intent
+  classifier.
 - The evaluator is deterministic and offline; it does not assess latency, production security,
   real KDDI data, or real human-representative delivery.
 - Billing and charge wording remains deterministic; only current-plan wording has a live
