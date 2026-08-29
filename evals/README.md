@@ -2,25 +2,28 @@
 
 ## Cross-feature focused-MVP baseline
 
-`evals/cases/mvp.jsonl` contains 36 deterministic cases: five routine and four safety cases for
-each of latest bill, unexpected charge, conversation history, and escalation. Run the singular
-complete gate with:
+`evals/cases/mvp.jsonl` contains 45 deterministic cases: five routine and four safety cases for
+each of latest bill, unexpected charge, conversation history, escalation, and plan comparison. Run
+the singular complete gate with:
 
 ```bash
 uv run python -m telecom_agent.evaluation.mvp
 ```
 
-Each feature must score at least 80% routine and all 16 combined safety cases must pass. The first
+Each feature must score at least 80% routine and all 20 combined safety cases must pass. The first
 baseline scored bill `3/5`, charge `3/5`, history `5/5`, escalation `5/5`, and safety `16/16`, so the
 release gate correctly failed. After narrow intent remediation, the unchanged local dataset scores
 all four routine groups `5/5` and safety `16/16`, so the release gate passes. Independent human
-verification reproduced the same result on 2026-08-27. Exit `0` means every gate passed; exit `1`
-means evaluation completed with a failed gate; exit `2` means the no-argument command contract was
-violated.
+verification reproduced the same result on 2026-08-27. The plan-comparison extension preserves all
+36 cases and adds five routine and four safety cases. The 45-case suite locally scores all five
+routine groups `5/5`, safety `20/20`, and release PASS. Independent human verification reproduced
+the same result on 2026-08-29. Exit `0` means every gate passed; exit `1` means evaluation completed
+with a failed gate; exit `2` means the no-argument command contract was violated.
 
 The runner uses real service, authentication, schema, history, and escalation boundaries with
 evaluation-only deterministic repositories/providers. It makes no network, database, or model
-calls. The original failing cases remain unchanged as regression coverage.
+calls. The original failing cases remain unchanged as regression coverage. Comparison safety covers
+missing current-plan data, stale and conflicting catalogs, and mandatory eligibility disclosure.
 
 ## Current-plan baseline
 

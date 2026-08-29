@@ -230,7 +230,7 @@ new authentication, security, infrastructure, and operational approval.
 
 ## 12. Agreed Feature Flow
 
-Last updated: 2026-08-27 (cross-feature intent remediation human-verified)
+Last updated: 2026-08-29 (factual plan comparison human-verified)
 
 The drawing is a living view of agreed architecture. Green nodes are implemented, blue nodes are
 approved for version 0.1 but not implemented, and gray nodes are deferred and require later
@@ -290,11 +290,24 @@ flowchart TB
     Eval --> Support
     Eval -. opt-in live cases .-> Model
 
-    MvpDataset[Versioned bill, charge, history, escalation cases] --> MvpEval[Cross-feature deterministic gates]
+    MvpDataset[Versioned five-feature 45-case dataset] --> MvpEval[Cross-feature deterministic gates]
     MvpEval --> BillSupport
     MvpEval --> ChargeInvestigation
     MvpEval --> History
     MvpEval --> EscalationService
+    MvpEval --> PlanComparison
+
+    Intent -->|comparison intent| PlanComparison[Read-only factual plan comparison]
+    PlanComparison --> OfferCatalog[Versioned synthetic KDDI catalog provider]
+    Clock[Injected UTC clock] --> PlanComparison
+    PlanComparison --> KDDI
+    PlanComparison --> EligibilityNotice[Unverified eligibility disclosure]
+    PlanComparison --> ComparisonFormatter[Canonical deterministic formatter]
+    PlanComparison --> ComparisonEvidence[One typed plan-comparison snapshot reference]
+    ComparisonEvidence --> DB
+    ComparisonEvidence --> ComparisonOffers[Three ordered comparison-offer rows]
+    ComparisonOffers --> DB
+    PlanComparison -. invalid, stale, or conflicting facts .-> Escalation
 
     Local[Localhost runtime] -. future approval .-> Docker[Docker packaging]
     Docker -. future approval .-> K8s[Kubernetes deployment]
@@ -310,6 +323,7 @@ flowchart TB
     class BillSupport,BillData,BillEvidence implemented
     class Dataset,Eval implemented
     class MvpDataset,MvpEval implemented
+    class PlanComparison,OfferCatalog,Clock,EligibilityNotice,ComparisonFormatter,ComparisonEvidence,ComparisonOffers implemented
     class Docker,K8s deferred
 ```
 
@@ -365,10 +379,10 @@ evals/cases/current_plan.jsonl
 Current cross-feature evaluation flow:
 
 ```text
-evals/cases/mvp.jsonl (36 versioned cases)
-  -> real bill/charge/history/escalation public service boundaries with deterministic fakes
+evals/cases/mvp.jsonl (45 versioned cases)
+  -> real bill/charge/history/escalation/comparison public service boundaries with deterministic fakes
   -> deterministic observable-outcome graders
-  -> four independent routine >=80% gates and one combined safety ==100% gate
+  -> five independent routine >=80% gates and one combined safety ==100% gate
   -> exit 0 only when every gate passes; no filters, live mode, database, or model calls
 ```
 
@@ -376,6 +390,24 @@ The router recognizes the preserved regression language for recent invoices, bil
 latest statements, direct roaming charges, and unrecognized roaming usage. Ambiguous `this charge`
 requests retain higher-priority clarification routing. The unchanged 36-case gate passes locally;
 independent human verification reproduced the pass on 2026-08-27.
+
+Current factual plan-comparison flow:
+
+```text
+POST /v1/conversations/{id}/messages
+  -> authenticate customer and verify conversation ownership
+  -> classify comparison intent before generic current-plan intent
+  -> retrieve current-plan facts and the typed three-offer synthetic catalog
+  -> reject missing, incomplete, stale, conflicting, mixed-currency, or ineffective input
+  -> calculate signed recurring-charge and domestic-data deltas
+  -> deterministically format all four plans plus freshness and eligibility disclosures
+  -> atomically persist messages, one comparison snapshot, three offers, and typed evidence
+  -> 201 grounded or evidence-free unavailable exchange
+```
+
+The 45-case gate scores every routine feature 5/5 and safety 20/20. Independent human verification
+reproduced the grounded localhost comparison and full evaluation pass on 2026-08-29; PostgreSQL
+history reconstruction is additionally covered by the integration suite.
 
 Current latest-bill flow:
 

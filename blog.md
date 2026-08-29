@@ -265,3 +265,108 @@ The independent run on the following day reproduced every green result: five of 
 for each feature and all sixteen safety cases. That closes the loop from trustworthy red baseline
 to trustworthy green remediation using the same command and the same versioned contract. It is a
 human-verified development checkpoint, not evidence about real KDDI systems or production traffic.
+
+With the focused MVP green, the roadmap can return to the deferred customer value rather than add
+more infrastructure for its own sake. Plan comparison, roaming choices, and savings advice all
+depend on the same missing foundation: a typed, dated catalog of synthetic KDDI offers that can be
+compared with the customer's current plan without inventing prices or eligibility.
+
+The smallest useful next increment is therefore read-only plan comparison. It can establish how
+offers become current or stale, which fields are comparable, and how uncertainty is shown before
+recommendation logic tries to decide what is “better” or “cheaper.”
+
+That increment is now approved. The architecture gains an agreed offer-catalog boundary feeding a
+read-only comparison with the customer's current synthetic plan. The next decision is intentionally
+about language and responsibility: whether the first slice reports comparable facts or declares a
+personalized winner, which would require materially more customer context and eligibility logic.
+
+The boundary is settled on facts. The first comparison may show prices, data allowances, effective
+dates, and meaningful differences, but it cannot quietly turn those dimensions into a claim that
+one plan is best for this customer. That recommendation will come later only after the project
+defines the customer inputs and eligibility evidence needed to support it.
+
+The first catalog will stay intentionally small: three synthetic offers spanning a cheaper,
+lower-data choice, a nearby mid-tier, and a more expensive high-data choice. Showing every offer in
+catalog order keeps this a transparent comparison exercise rather than a ranking algorithm wearing
+a neutral label.
+
+The catalog will also stay out of the customer database. It belongs behind a typed KDDI provider
+boundary with explicit version and freshness metadata, because offers are reference data rather
+than customer-owned records. The deterministic adapter supplies today's prototype; a real source
+can replace it later without rewriting the comparison rules.
+
+One phrase now carries an explicit safety boundary: these are catalog-listed options, not plans
+known to be available to this customer. The agent must say eligibility is unverified instead of
+turning public reference data into a personalized promise.
+
+The comparison will be durable in another sense as well. Every grounded answer will carry a typed
+reference to an immutable PostgreSQL snapshot of the current plan and all three offers, including
+catalog version and freshness. A later catalog refresh therefore cannot rewrite what an earlier
+conversation claimed.
+
+The first answer will be deliberately canonical rather than model-written. Comparing four plans
+creates a dense set of prices, allowances, dates, and disclosures; deterministic formatting makes
+completeness observable now. Model fluency can return later only with a comparison-specific guard
+that treats a missing or invented number as a rejected answer.
+
+The safety rule is equally strict about inputs. If either the customer's plan or any part of the
+catalog is missing, stale, contradictory, incomplete, or not currently effective, the comparison
+stops. It will explain that limitation and offer human support instead of quietly removing a plan
+and presenting the remainder as the complete market picture.
+
+The synthetic tradeoffs now have concrete numbers. Against the current 20 GB plan at JPY 4,500,
+the catalog will show 5 GB at JPY 2,800, 30 GB at JPY 5,200, and 100 GB at JPY 7,500. Those are
+recurring plan charges—not predicted bills—and the names remain visibly synthetic so test data
+cannot be mistaken for a live KDDI offer.
+
+Freshness now has a number rather than a vague adjective. The initial August 28 catalog may be used
+for thirty days inclusive; on day thirty-one, the comparison fails safely until the source is
+refreshed. An injected clock will make that boundary reproducible instead of tying tests to the
+developer's wall clock.
+
+Customers will ask for this through the same conversation endpoint they already use for plans and
+bills. Natural comparison language becomes another deterministic route, while authentication,
+ownership, message history, and evidence remain one coherent API rather than splitting into a
+special comparison service at the HTTP boundary.
+
+The comparison will do the arithmetic customers otherwise perform mentally: how many yen and how
+many gigabytes each option differs from the current plan. It will stop short of calling a lower
+recurring charge “savings,” because a real bill also includes usage, fees, taxes, discounts, and
+eligibility that this slice cannot see.
+
+The API will expose that comparison as one evidence unit. A grounded answer points to one immutable
+snapshot containing both sides and every delta; an unsafe input produces no pseudo-evidence, only a
+durable unavailable response and a path to human support.
+
+Evaluation expands with the feature instead of following later. The one MVP command will grow from
+36 to 45 cases, giving comparison five routine requests and four ways to fail safely. Its routine
+score stands alone, while all twenty safety cases must pass together; no older scenario is removed
+to make space.
+
+The storage design now completes the picture. A comparison snapshot owns the current-plan and
+catalog context, three ordered child rows preserve each offer and its signed deltas, and a message
+link makes that evidence visible through conversation history. This mirrors the proven billing
+pattern while keeping the complete comparison one auditable unit.
+
+The planned slice is now real locally. The router recognizes natural comparison requests before the
+generic current-plan path, retrieves the typed catalog, checks the entire input set, calculates the
+approved deltas, and emits one canonical answer with an explicit eligibility limitation. Unsafe
+input creates only a durable unavailable exchange—never a partial comparison snapshot.
+
+The database migration captures that answer as designed, and history reconstructs its new evidence
+type. Most importantly, evaluation grew without rewriting its past: the original thirty-six rows
+remain, nine comparison rows were appended, all five features score five of five, and all twenty
+safety cases pass. The implementation now waits for the same independent human migration, API, and
+evaluation loop used by earlier checkpoints.
+
+A final determinism pass caught a subtle fixture issue before handoff: a completely frozen clock
+gave both messages the same timestamp, correctly activating the database's UUID tie-breaker but
+making conversational order arbitrary. The test clock now advances in deterministic microseconds,
+while the application still uses injected UTC time for the thirty-day freshness boundary.
+
+The independent localhost run then closed the loop. Its response contained the exact current plan,
+all three offers and deltas, the catalog date, the no-savings limitation, the unverified-eligibility
+warning, and one comparison evidence reference. The separate evaluator reproduced five of five for
+every feature and twenty of twenty safety cases. Plan comparison is now a human-verified synthetic
+development capability, while recommendation, eligibility verification, and account changes remain
+deliberately outside its promise.

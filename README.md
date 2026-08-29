@@ -1,11 +1,11 @@
 # Telecom Customer-Service Agent
 
-Status: Active implementation — cross-feature intent remediation human-verified; release gate passes
+Status: Active implementation — factual plan comparison and expanded release gate human-verified
 
 ## Purpose
 
-An API-first evaluation prototype for grounded KDDI plan and billing support, unexpected-charge
-explanations, and contextual human escalation using synthetic customer data.
+An API-first evaluation prototype for grounded KDDI plan and billing support, factual plan
+comparison, unexpected-charge explanations, and contextual human escalation using synthetic data.
 
 ## Development
 
@@ -73,6 +73,7 @@ Running upgrade 20260826_01 -> 20260826_02, Create messages and plan snapshots.
 Running upgrade 20260826_02 -> 20260826_03, Create bill snapshots, line items, and message evidence.
 Running upgrade 20260826_03 -> 20260826_04, Create charge evidence snapshots and message evidence.
 Running upgrade 20260826_04 -> 20260826_05, Create contextual human escalations.
+Running upgrade 20260826_05 -> 20260829_06, Create plan comparison snapshots, offers, and message evidence.
 ```
 
 To stop PostgreSQL later without deleting its data:
@@ -158,6 +159,30 @@ I can’t generate a grounded answer right now. Please try again later or reques
 The API intentionally does not expose provider exception details. Check the configured model name
 in the SambaNova account before changing it; do not silently use another model.
 
+Compare the current plan with the three catalog-listed synthetic KDDI options:
+
+```bash
+curl -i -X POST \
+  "http://127.0.0.1:8000/v1/conversations/${CONVERSATION_ID}/messages" \
+  -H 'Authorization: Bearer synthetic-alice-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"content":"Compare my current plan."}'
+```
+
+Expect `201 Created`, `answer_status: "grounded"`, `uncertain: false`, and exactly one
+`plan_comparison_snapshot` evidence reference. The deterministic response compares the current
+20 GB/JPY 4,500 recurring-charge plan with:
+
+- Synthetic KDDI Lite 5GB: 5 GB and JPY 2,800; JPY 1,700 and 15 GB lower.
+- Synthetic KDDI Plus 30GB: 30 GB and JPY 5,200; JPY 700 and 10 GB higher.
+- Synthetic KDDI Max 100GB: 100 GB and JPY 7,500; JPY 3,000 and 80 GB higher.
+
+It must say the catalog is dated August 28, 2026, customer-specific eligibility is not verified,
+and recurring charges are not total bills or projected savings. It does not call MiniMax-M3, rank
+plans, recommend a winner, or change the account. The catalog becomes stale after 30 days; stale or
+otherwise unsafe input returns an uncertain evidence-free unavailable answer with a human-support
+next step.
+
 Ask for the latest synthetic KDDI bill using the same conversation:
 
 ```bash
@@ -214,9 +239,10 @@ curl -i \
 
 Expect `HTTP/1.1 200 OK` with the conversation `id`, `status`, `created_at`, and every message in
 chronological order. User messages contain their base message fields. Assistant messages also
-contain `answer_status`, `uncertain`, and the same typed `plan_snapshot`, `bill_snapshot`, or
-`charge_snapshot` evidence references returned when each message was created. Version 0.1 returns
-the complete history without pagination and does not embed the referenced snapshot bodies.
+contain `answer_status`, `uncertain`, and the same typed `plan_snapshot`, `bill_snapshot`,
+`charge_snapshot`, or `plan_comparison_snapshot` evidence references returned when each message was
+created. Version 0.1 returns the complete history without pagination and does not embed snapshot
+bodies.
 
 The route is authenticated and customer-scoped. A missing conversation and a conversation owned
 by another customer both return the same `404 conversation_not_found` response. This read-only
@@ -327,6 +353,29 @@ After investigating the charge, confirm the persisted causal evidence:
       );"
 ```
 
+After comparing plans, confirm the immutable snapshot and three ordered offers:
+
+```bash
+/opt/homebrew/bin/psql \
+  -h 127.0.0.1 \
+  -p 55432 \
+  -d telecom_agent \
+  -c "SELECT s.current_plan_name, s.current_recurring_charge,
+             s.catalog_as_of, s.source_version, s.eligibility_verified,
+             o.position, o.plan_name, o.recurring_charge,
+             o.recurring_charge_delta, o.data_allowance_delta_gb
+      FROM plan_comparison_snapshots AS s
+      JOIN plan_comparison_offers AS o ON o.comparison_snapshot_id = s.id
+      WHERE s.id = (
+          SELECT mpce.comparison_snapshot_id
+          FROM message_plan_comparison_evidence AS mpce
+          JOIN messages AS m ON m.id = mpce.message_id
+          ORDER BY m.created_at DESC
+          LIMIT 1
+      )
+      ORDER BY o.position;"
+```
+
 After requesting escalation, confirm its status and immutable context size:
 
 ```bash
@@ -392,18 +441,20 @@ Expect routine `10/10 (100.0%)`, safety `6/6 (100.0%)`, and `Release gate: PASS`
 
 ## Cross-Feature MVP Evaluation
 
-Run the complete deterministic 36-case bill, charge, history, and escalation gate:
+Run the complete deterministic 45-case bill, charge, history, escalation, and plan-comparison gate:
 
 ```bash
 uv run python -m telecom_agent.evaluation.mvp
 ```
 
-The command uses no database, network, SambaNova key, or live model. The preserved first baseline
+The command uses no database, network, SambaNova key, or live model. The preserved 36-case baseline
 scored latest bill `3/5`, unexpected charge `3/5`, history `5/5`, escalation `5/5`, and safety
 `16/16`, so it correctly failed. The narrow intent remediation now recognizes `recent invoice`,
 `billing period`/latest-statement, direct `roaming charge`, and unrecognized-roaming-usage language.
-The unchanged gate now reports all four routine groups at `5/5`, safety at `16/16`, and
-`Release gate: PASS`. Independent human verification reproduced this result on 2026-08-27.
+That unchanged gate passed and was human-verified on 2026-08-27. The plan-comparison slice preserves
+those 36 cases and adds five routine plus four safety cases. The local 45-case result reports all
+five routine groups at `5/5`, safety at `20/20`, and `Release gate: PASS`; independent human
+verification reproduced the grounded API response and expanded gate on 2026-08-29.
 
 ## Project Documentation
 

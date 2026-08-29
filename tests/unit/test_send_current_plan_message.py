@@ -191,9 +191,9 @@ def test_unsupported_question_is_persisted_without_querying_or_inventing_plan_da
     assert exchange.assistant_message.uncertain is True
     assert exchange.assistant_message.evidence == ()
     assert exchange.assistant_message.content == (
-        "I can currently explain your current mobile plan, summarize your latest bill, or "
-        "investigate the supported unexpected roaming charge. Other requests are not implemented "
-        "yet."
+        "I can currently explain or factually compare your mobile plan, summarize your latest "
+        "bill, or investigate the supported unexpected roaming charge. Other requests are not "
+        "implemented yet."
     )
     assert plans.requests == []
     assert generator.requests == []

@@ -122,6 +122,110 @@ class MessagePlanEvidenceRecord(Base):
     )
 
 
+class PlanComparisonSnapshotRecord(Base):
+    __tablename__ = "plan_comparison_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "current_data_allowance_gb > 0",
+            name="ck_plan_comparison_snapshots_positive_data",
+        ),
+        CheckConstraint(
+            "current_recurring_charge >= 0",
+            name="ck_plan_comparison_snapshots_nonnegative_charge",
+        ),
+        CheckConstraint(
+            "char_length(currency) = 3",
+            name="ck_plan_comparison_snapshots_currency_length",
+        ),
+        CheckConstraint(
+            "eligibility_verified = false",
+            name="ck_plan_comparison_snapshots_unverified_eligibility",
+        ),
+        Index("ix_plan_comparison_snapshots_customer_id", "customer_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    customer_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("synthetic_customers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    current_plan_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_plan_name: Mapped[str] = mapped_column(Text, nullable=False)
+    current_data_allowance_gb: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_recurring_charge: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    current_effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    catalog_as_of: Mapped[date] = mapped_column(Date, nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    eligibility_verified: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+class PlanComparisonOfferRecord(Base):
+    __tablename__ = "plan_comparison_offers"
+    __table_args__ = (
+        CheckConstraint(
+            "data_allowance_gb > 0",
+            name="ck_plan_comparison_offers_positive_data",
+        ),
+        CheckConstraint(
+            "recurring_charge >= 0",
+            name="ck_plan_comparison_offers_nonnegative_charge",
+        ),
+        CheckConstraint(
+            "char_length(currency) = 3",
+            name="ck_plan_comparison_offers_currency_length",
+        ),
+        CheckConstraint(
+            "position >= 0",
+            name="ck_plan_comparison_offers_nonnegative_position",
+        ),
+        UniqueConstraint(
+            "comparison_snapshot_id",
+            "position",
+            name="uq_plan_comparison_offers_snapshot_position",
+        ),
+        UniqueConstraint(
+            "comparison_snapshot_id",
+            "plan_code",
+            name="uq_plan_comparison_offers_snapshot_plan_code",
+        ),
+        Index("ix_plan_comparison_offers_snapshot_id", "comparison_snapshot_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    comparison_snapshot_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("plan_comparison_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    plan_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    plan_name: Mapped[str] = mapped_column(Text, nullable=False)
+    data_allowance_gb: Mapped[int] = mapped_column(Integer, nullable=False)
+    recurring_charge: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    recurring_charge_delta: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    data_allowance_delta_gb: Mapped[int] = mapped_column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class MessagePlanComparisonEvidenceRecord(Base):
+    __tablename__ = "message_plan_comparison_evidence"
+
+    message_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    comparison_snapshot_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("plan_comparison_snapshots.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
 class BillSnapshotRecord(Base):
     __tablename__ = "bill_snapshots"
     __table_args__ = (

@@ -14,8 +14,11 @@ from telecom_agent.adapters.postgres.models import (
     EscalationRecord,
     MessageBillEvidenceRecord,
     MessageChargeEvidenceRecord,
+    MessagePlanComparisonEvidenceRecord,
     MessagePlanEvidenceRecord,
     MessageRecord,
+    PlanComparisonOfferRecord,
+    PlanComparisonSnapshotRecord,
     PlanSnapshotRecord,
     SyntheticCustomerRecord,
 )
@@ -191,6 +194,17 @@ class SqlAlchemyConversationRepository:
                             charge_row.charge_snapshot_id,
                         )
                     )
+                for comparison_row in session.scalars(
+                    select(MessagePlanComparisonEvidenceRecord).where(
+                        MessagePlanComparisonEvidenceRecord.message_id.in_(message_ids)
+                    )
+                ):
+                    evidence_by_message[comparison_row.message_id].append(
+                        EvidenceReference(
+                            EvidenceType.PLAN_COMPARISON_SNAPSHOT,
+                            comparison_row.comparison_snapshot_id,
+                        )
+                    )
 
             messages = tuple(
                 Message(
@@ -291,6 +305,44 @@ class SqlAlchemyMessageExchangeRepository:
                     )
                 )
 
+            if exchange.comparison_snapshot is not None:
+                comparison = exchange.comparison_snapshot
+                session.add(
+                    PlanComparisonSnapshotRecord(
+                        id=comparison.id,
+                        customer_id=comparison.customer_id,
+                        current_plan_code=comparison.current_plan_code,
+                        current_plan_name=comparison.current_plan_name,
+                        current_data_allowance_gb=comparison.current_data_allowance_gb,
+                        current_recurring_charge=comparison.current_recurring_charge,
+                        currency=comparison.currency,
+                        current_effective_from=comparison.current_effective_from,
+                        catalog_as_of=comparison.catalog_as_of,
+                        retrieved_at=comparison.retrieved_at,
+                        source_version=comparison.source_version,
+                        eligibility_verified=comparison.eligibility_verified,
+                    )
+                )
+                session.flush()
+                session.add_all(
+                    [
+                        PlanComparisonOfferRecord(
+                            id=offer.id,
+                            comparison_snapshot_id=comparison.id,
+                            plan_code=offer.plan_code,
+                            plan_name=offer.plan_name,
+                            data_allowance_gb=offer.data_allowance_gb,
+                            recurring_charge=offer.recurring_charge,
+                            currency=offer.currency,
+                            effective_from=offer.effective_from,
+                            recurring_charge_delta=offer.recurring_charge_delta,
+                            data_allowance_delta_gb=offer.data_allowance_delta_gb,
+                            position=position,
+                        )
+                        for position, offer in enumerate(comparison.offers)
+                    ]
+                )
+
             for message in (exchange.user_message, exchange.assistant_message):
                 session.add(
                     MessageRecord(
@@ -329,6 +381,13 @@ class SqlAlchemyMessageExchangeRepository:
                         MessageChargeEvidenceRecord(
                             message_id=exchange.assistant_message.id,
                             charge_snapshot_id=evidence.id,
+                        )
+                    )
+                elif evidence.type is EvidenceType.PLAN_COMPARISON_SNAPSHOT:
+                    session.add(
+                        MessagePlanComparisonEvidenceRecord(
+                            message_id=exchange.assistant_message.id,
+                            comparison_snapshot_id=evidence.id,
                         )
                     )
 

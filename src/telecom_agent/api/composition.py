@@ -1,5 +1,6 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from sqlalchemy import create_engine
@@ -11,6 +12,7 @@ from telecom_agent.adapters.kddi_mock.charge_evidence import (
 )
 from telecom_agent.adapters.kddi_mock.current_plans import SyntheticKddiCurrentPlanProvider
 from telecom_agent.adapters.kddi_mock.latest_bills import SyntheticKddiLatestBillProvider
+from telecom_agent.adapters.kddi_mock.plan_catalog import SyntheticKddiPlanCatalogProvider
 from telecom_agent.adapters.postgres.health import SqlAlchemyDatabaseHealth
 from telecom_agent.adapters.postgres.repositories import (
     SqlAlchemyConversationRepository,
@@ -33,6 +35,7 @@ def create_postgres_app(
     *,
     answer_generator: CurrentPlanAnswerGenerator | None = None,
     handoff: HumanHandoff | None = None,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> FastAPI:
     """Compose the API with PostgreSQL-backed adapters."""
     engine = create_engine(database_url)
@@ -54,9 +57,11 @@ def create_postgres_app(
         current_plans=SyntheticKddiCurrentPlanProvider(),
         latest_bills=SyntheticKddiLatestBillProvider(),
         charge_evidence=SyntheticKddiChargeEvidenceProvider(),
+        plan_catalog=SyntheticKddiPlanCatalogProvider(),
         answer_generator=(
             answer_generator or SambaNovaCurrentPlanAnswerGenerator(sambanova_settings)
         ),
         exchanges=SqlAlchemyMessageExchangeRepository(session_factory),
+        clock=clock,
         lifespan=lifespan,
     )

@@ -3,6 +3,7 @@ from uuid import UUID
 
 from telecom_agent.domain.bills import LatestBillDetails
 from telecom_agent.domain.charges import ChargeEvidenceDetails
+from telecom_agent.domain.comparisons import PlanCatalogDetails
 from telecom_agent.domain.messages import MessageExchange
 from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts
 
@@ -17,6 +18,10 @@ class ConversationAccessRepository(Protocol):
 
 class CurrentPlanProvider(Protocol):
     def get_current_plan(self, customer_id: UUID) -> CurrentPlanDetails | None: ...
+
+
+class PlanCatalogProvider(Protocol):
+    def get_plan_catalog(self) -> PlanCatalogDetails | None: ...
 
 
 class LatestBillProvider(Protocol):

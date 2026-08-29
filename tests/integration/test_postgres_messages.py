@@ -1,6 +1,6 @@
 import os
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -18,8 +18,11 @@ from telecom_agent.adapters.postgres.models import (
     ConversationRecord,
     MessageBillEvidenceRecord,
     MessageChargeEvidenceRecord,
+    MessagePlanComparisonEvidenceRecord,
     MessagePlanEvidenceRecord,
     MessageRecord,
+    PlanComparisonOfferRecord,
+    PlanComparisonSnapshotRecord,
     PlanSnapshotRecord,
     SyntheticCustomerRecord,
 )
@@ -68,10 +71,13 @@ def session_factory(migrated_engine: Engine) -> sessionmaker[Session]:
 @pytest.fixture(autouse=True)
 def clean_records(session_factory: sessionmaker[Session]) -> Iterator[None]:
     with session_factory.begin() as session:
+        session.execute(delete(MessagePlanComparisonEvidenceRecord))
         session.execute(delete(MessageChargeEvidenceRecord))
         session.execute(delete(MessageBillEvidenceRecord))
         session.execute(delete(MessagePlanEvidenceRecord))
         session.execute(delete(MessageRecord))
+        session.execute(delete(PlanComparisonOfferRecord))
+        session.execute(delete(PlanComparisonSnapshotRecord))
         session.execute(delete(ChargeEvidenceSnapshotRecord))
         session.execute(delete(BillLineItemRecord))
         session.execute(delete(BillSnapshotRecord))
@@ -95,6 +101,9 @@ def test_migrations_create_message_plan_and_bill_snapshot_schema(
         "message_bill_evidence",
         "charge_evidence_snapshots",
         "message_charge_evidence",
+        "plan_comparison_snapshots",
+        "plan_comparison_offers",
+        "message_plan_comparison_evidence",
     } <= set(inspector.get_table_names())
     message_columns = {column["name"] for column in inspector.get_columns("messages")}
     assert message_columns == {
@@ -117,6 +126,23 @@ def test_migrations_create_message_plan_and_bill_snapshot_schema(
         "retrieved_at",
         "source_version",
         "availability",
+    }
+    comparison_columns = {
+        column["name"] for column in inspector.get_columns("plan_comparison_snapshots")
+    }
+    assert comparison_columns == {
+        "id",
+        "customer_id",
+        "current_plan_code",
+        "current_plan_name",
+        "current_data_allowance_gb",
+        "current_recurring_charge",
+        "currency",
+        "current_effective_from",
+        "catalog_as_of",
+        "retrieved_at",
+        "source_version",
+        "eligibility_verified",
     }
 
 
@@ -219,6 +245,77 @@ def test_postgres_composition_persists_grounded_message_exchange(
     assert snapshot.currency == "JPY"
     assert evidence is not None
     assert evidence.plan_snapshot_id == snapshot.id
+
+
+def test_postgres_composition_persists_and_retrieves_plan_comparison_evidence(
+    session_factory: sessionmaker[Session],
+) -> None:
+    assert TEST_DATABASE_URL is not None
+    seed_synthetic_customer(session_factory, DEVELOPMENT_CUSTOMER)
+    clock_ticks = iter(range(4))
+    clock_start = datetime(2026, 8, 29, 6, 0, tzinfo=UTC)
+    client = TestClient(
+        create_postgres_app(
+            TEST_DATABASE_URL,
+            TEST_SAMBANOVA_SETTINGS,
+            answer_generator=DeterministicAnswerGenerator(),
+            clock=lambda: clock_start + timedelta(microseconds=next(clock_ticks)),
+        )
+    )
+    headers = {"Authorization": f"Bearer {DEVELOPMENT_CUSTOMER.raw_token}"}
+    conversation_response = client.post("/v1/conversations", headers=headers)
+    conversation_id = UUID(conversation_response.json()["id"])
+
+    response = client.post(
+        f"/v1/conversations/{conversation_id}/messages",
+        headers=headers,
+        json={"content": "Compare my current plan."},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assistant_message_id = UUID(assistant["id"])
+    snapshot_id = UUID(assistant["evidence"][0]["id"])
+    with session_factory() as session:
+        snapshot = session.get(PlanComparisonSnapshotRecord, snapshot_id)
+        offers = session.scalars(
+            select(PlanComparisonOfferRecord)
+            .where(PlanComparisonOfferRecord.comparison_snapshot_id == snapshot_id)
+            .order_by(PlanComparisonOfferRecord.position)
+        ).all()
+        evidence = session.scalar(
+            select(MessagePlanComparisonEvidenceRecord).where(
+                MessagePlanComparisonEvidenceRecord.message_id == assistant_message_id
+            )
+        )
+
+    assert snapshot is not None
+    assert snapshot.customer_id == DEVELOPMENT_CUSTOMER.customer_id
+    assert snapshot.current_plan_name == "Synthetic KDDI 5G 20GB"
+    assert snapshot.current_recurring_charge == Decimal("4500.00")
+    assert snapshot.catalog_as_of.isoformat() == "2026-08-28"
+    assert snapshot.source_version == "synthetic-kddi-catalog-2026-08-28"
+    assert snapshot.eligibility_verified is False
+    assert [offer.plan_name for offer in offers] == [
+        "Synthetic KDDI Lite 5GB",
+        "Synthetic KDDI Plus 30GB",
+        "Synthetic KDDI Max 100GB",
+    ]
+    assert [offer.recurring_charge_delta for offer in offers] == [
+        Decimal("-1700.00"),
+        Decimal("700.00"),
+        Decimal("3000.00"),
+    ]
+    assert [offer.data_allowance_delta_gb for offer in offers] == [-15, 10, 80]
+    assert evidence is not None
+    assert evidence.comparison_snapshot_id == snapshot_id
+
+    history = client.get(f"/v1/conversations/{conversation_id}", headers=headers)
+
+    assert history.status_code == 200
+    assert history.json()["messages"][1]["evidence"] == [
+        {"type": "plan_comparison_snapshot", "id": str(snapshot_id)}
+    ]
 
 
 def test_postgres_composition_persists_latest_bill_and_line_item_evidence(

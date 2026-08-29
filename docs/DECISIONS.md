@@ -381,3 +381,149 @@ Implement the four approved language additions inside the existing normalized in
 Do not alter bill or charge retrieval, canonical answer formatting, evidence construction, or
 persistence. Keep ambiguous `this charge` routing ahead of charge investigation. This makes the
 unchanged 36-case gate green without weakening its graders or introducing model-dependent routing.
+
+## D-043 — Build plan comparison on a typed offer catalog
+
+Date: 2026-08-27 · Status: Accepted
+
+Make read-only synthetic KDDI plan comparison the next post-0.1 feature. Introduce one typed, dated
+offer catalog shared by future comparison, roaming, and savings capabilities, rather than encoding
+offer facts independently in each answer path. Compare catalog offers with the authenticated
+customer's current plan; changing the customer's plan remains outside this feature.
+
+## D-044 — Separate factual comparison from recommendation
+
+Date: 2026-08-27 · Status: Accepted
+
+The first plan-comparison slice presents evidence-backed price, domestic-data, effective-date, and
+key-difference facts side by side. It does not label an offer “best,” infer customer preferences or
+eligibility, calculate personalized savings, or change the account. Recommendation remains a later
+feature with its own inputs and evaluation contract.
+
+## D-045 — Start with three contrasting catalog offers
+
+Date: 2026-08-27 · Status: Accepted
+
+Use three available synthetic KDDI offers in the first catalog: a lower-cost/lower-data option, a
+mid-tier option near the customer's current 20 GB plan, and a higher-cost/high-data option. Compare
+all three with the current plan and preserve their source order; do not rank, score, or hide offers.
+
+## D-046 — Keep catalog reference data behind a provider port
+
+Date: 2026-08-28 · Status: Accepted
+
+Expose the typed plan catalog through a KDDI provider port with a deterministic synthetic adapter,
+not PostgreSQL. Include explicit source-version and freshness metadata. This catalog is external
+reference data rather than customer-owned state; a future real KDDI adapter can replace the mock
+without changing comparison orchestration or persistence boundaries.
+
+## D-047 — Do not equate catalog visibility with customer eligibility
+
+Date: 2026-08-28 · Status: Accepted
+
+Describe offers as catalog-listed KDDI options, not as plans available to the authenticated
+customer. Every comparison must state that customer-specific eligibility is unverified. Do not
+infer eligibility from current-plan ownership, catalog presence, price, or data allowance.
+
+## D-048 — Persist immutable plan-comparison evidence
+
+Date: 2026-08-28 · Status: Accepted
+
+Atomically persist each grounded comparison exchange with a typed comparison evidence reference
+and immutable PostgreSQL snapshot. Capture the current-plan facts, all three catalog offers,
+catalog source version, and freshness metadata shown to the customer. Conversation history must
+continue to display the exact evidence reference even after a later catalog changes.
+
+## D-049 — Format initial comparisons deterministically
+
+Date: 2026-08-28 · Status: Accepted
+
+Use a canonical deterministic formatter for the first comparison response. It must include the
+current plan, all three catalog offers, comparable numeric/date facts, catalog freshness, and the
+eligibility disclosure. Do not call MiniMax-M3 in this slice. Model wording requires a later
+comparison-specific output guard and evaluation gate before adoption.
+
+## D-050 — Fail closed on unsafe comparison inputs
+
+Date: 2026-08-28 · Status: Accepted
+
+Do not compare when the current plan or offer catalog is missing, incomplete, stale, internally
+conflicting, or outside its effective window. Return a typed `unavailable` answer that explains the
+limitation and recommends explicit human support. Persist no grounded comparison snapshot or
+evidence when the input contract fails; never silently drop suspect offers and compare the rest.
+
+## D-051 — Fix the first synthetic comparison facts
+
+Date: 2026-08-28 · Status: Accepted
+
+Populate the initial catalog with `Synthetic KDDI Lite 5GB` at JPY 2,800/month, `Synthetic KDDI
+Plus 30GB` at JPY 5,200/month, and `Synthetic KDDI Max 100GB` at JPY 7,500/month. Compare them with
+the existing 20 GB, JPY 4,500/month current-plan fixture. Label every amount as a monthly recurring
+charge rather than a total bill, and keep all names explicitly synthetic.
+
+## D-052 — Enforce a 30-day catalog freshness window
+
+Date: 2026-08-28 · Status: Accepted
+
+Set the initial source version to `synthetic-kddi-catalog-2026-08-28` with an `as_of` date of
+2026-08-28. Treat age of 30 days or less as current and age greater than 30 days as stale, using an
+injected UTC clock for deterministic boundary tests. A stale catalog blocks comparison until the
+synthetic source version and date are explicitly refreshed.
+
+## D-053 — Reuse the conversation message API for comparison
+
+Date: 2026-08-28 · Status: Accepted
+
+Route natural comparison requests through the existing authenticated
+`POST /v1/conversations/{conversation_id}/messages` endpoint. Extend deterministic intent matching
+for current-plan comparison, other-plan, and available-plan-option language. Do not add a separate
+comparison endpoint; preserve customer ownership, persisted exchanges, response status, and typed
+evidence conventions.
+
+## D-054 — Show factual deltas without projecting savings
+
+Date: 2026-08-28 · Status: Accepted
+
+Calculate each catalog offer's signed monthly-recurring-charge and domestic-data difference from
+the current plan. For the initial fixture: Lite is JPY 1,700/15 GB lower, Plus is JPY 700/10 GB
+higher, and Max is JPY 3,000/80 GB higher. Do not translate a lower recurring charge into promised
+bill savings, because usage, fees, discounts, taxes, and eligibility are outside this evidence.
+
+## D-055 — Use one typed comparison evidence reference
+
+Date: 2026-08-28 · Status: Accepted
+
+Return valid comparisons as `grounded`, `uncertain: false`, with exactly one
+`plan_comparison_snapshot` evidence reference covering the current plan, all three offers, source
+metadata, and computed deltas. Return invalid or unavailable comparisons as `unavailable`,
+`uncertain: true`, with no evidence and a human-support next step. Persist the user and safe
+assistant messages in both paths.
+
+## D-056 — Add plan comparison to the singular MVP gate
+
+Date: 2026-08-28 · Status: Accepted
+
+Extend `uv run python -m telecom_agent.evaluation.mvp` from 36 to 45 deterministic cases by adding
+five plan-comparison routine cases and four safety cases. Require at least 80% comparison routine
+success. Add missing current plan, stale catalog, conflicting catalog, and unverified-eligibility
+disclosure cases to the mandatory combined safety gate, which grows from 16/16 to 20/20. Preserve
+all existing cases and block release on any feature gate or safety failure.
+
+## D-057 — Normalize persisted comparison snapshots and offers
+
+Date: 2026-08-29 · Status: Accepted
+
+Add one forward-only Alembic migration with `plan_comparison_snapshots`, ordered
+`plan_comparison_offers`, and `message_plan_comparison_evidence`. Store customer ownership,
+current-plan facts, catalog source/freshness, retrieval time, and the unverified-eligibility state on
+the snapshot. Store each offer's facts, position, and signed charge/data deltas in child rows. Link
+the grounded assistant message to exactly one snapshot, following existing bill evidence patterns.
+
+## D-058 — Inject comparison time through application composition
+
+Date: 2026-08-29 · Status: Accepted
+
+Pass the UTC clock through FastAPI and PostgreSQL composition into support-message orchestration.
+Production defaults to real UTC time; API, integration, and evaluation tests inject deterministic
+time. Test clocks advance by deterministic microseconds when message order is under test, preserving
+the repository's timestamp-plus-UUID ordering contract.

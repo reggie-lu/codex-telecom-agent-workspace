@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from datetime import UTC, datetime
 from re import fullmatch
 from typing import Annotated
 from uuid import UUID
@@ -32,6 +34,7 @@ from telecom_agent.ports.messages import (
     CurrentPlanProvider,
     LatestBillProvider,
     MessageExchangeRepository,
+    PlanCatalogProvider,
 )
 from telecom_agent.services.create_conversation import CreateConversationService
 from telecom_agent.services.create_escalation import CreateEscalationService
@@ -57,6 +60,8 @@ def create_app(
     exchanges: MessageExchangeRepository,
     latest_bills: LatestBillProvider | None = None,
     charge_evidence: ChargeEvidenceProvider | None = None,
+    plan_catalog: PlanCatalogProvider | None = None,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     lifespan: Lifespan[FastAPI] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Telecom Customer-Service Agent", lifespan=lifespan)
@@ -74,8 +79,10 @@ def create_app(
         current_plans=current_plans,
         latest_bills=latest_bills,
         charge_evidence=charge_evidence,
+        plan_catalog=plan_catalog,
         answer_generator=answer_generator,
         exchanges=exchanges,
+        clock=clock,
     )
 
     @app.exception_handler(UnauthorizedError)

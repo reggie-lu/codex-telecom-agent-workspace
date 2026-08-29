@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from hashlib import sha256
 from uuid import UUID
@@ -6,6 +6,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
+from telecom_agent.adapters.kddi_mock.plan_catalog import SyntheticKddiPlanCatalogProvider
 from telecom_agent.api.app import create_app
 from telecom_agent.domain.bills import BillLineItem, LatestBillDetails
 from telecom_agent.domain.charges import ChargeEvidenceDetails, ChargeEvidenceState
@@ -145,10 +146,32 @@ def build_client(
         current_plans=StubCurrentPlans(plan_available),
         latest_bills=StubLatestBills(bill_available),
         charge_evidence=StubChargeEvidence(charge_evidence_available),
+        plan_catalog=SyntheticKddiPlanCatalogProvider(),
         answer_generator=DeterministicAnswerGenerator(),
         exchanges=exchanges,
+        clock=lambda: datetime(2026, 8, 29, 6, 0, tzinfo=UTC),
     )
     return TestClient(app), exchanges
+
+
+def test_plan_comparison_message_returns_one_grounded_comparison_evidence() -> None:
+    client, exchanges = build_client()
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/messages",
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+        json={"content": "Compare my current plan."},
+    )
+
+    assert response.status_code == 201
+    assistant = response.json()["assistant_message"]
+    assert assistant["answer_status"] == "grounded"
+    assert assistant["uncertain"] is False
+    assert [item["type"] for item in assistant["evidence"]] == [
+        "plan_comparison_snapshot"
+    ]
+    assert "customer-specific eligibility is not verified" in assistant["content"]
+    assert exchanges.saved[0].comparison_snapshot is not None
 
 
 def test_latest_bill_message_returns_grounded_bill_evidence() -> None:

@@ -16,6 +16,11 @@ from telecom_agent.domain.charges import (
     ChargeEvidenceSnapshot,
     ChargeEvidenceState,
 )
+from telecom_agent.domain.comparisons import (
+    PlanCatalogDetails,
+    PlanComparisonOfferSnapshot,
+    PlanComparisonSnapshot,
+)
 from telecom_agent.domain.messages import (
     AnswerStatus,
     EvidenceReference,
@@ -24,7 +29,7 @@ from telecom_agent.domain.messages import (
     MessageExchange,
     MessageRole,
 )
-from telecom_agent.domain.plans import GroundedCurrentPlanFacts, PlanSnapshot
+from telecom_agent.domain.plans import CurrentPlanDetails, GroundedCurrentPlanFacts, PlanSnapshot
 from telecom_agent.ports.messages import (
     AnswerGenerationUnavailableError,
     ChargeEvidenceProvider,
@@ -33,6 +38,7 @@ from telecom_agent.ports.messages import (
     CurrentPlanProvider,
     LatestBillProvider,
     MessageExchangeRepository,
+    PlanCatalogProvider,
 )
 from telecom_agent.services.errors import ConversationNotFoundError
 
@@ -47,6 +53,7 @@ class SendSupportMessageService:
         exchanges: MessageExchangeRepository,
         latest_bills: LatestBillProvider | None = None,
         charge_evidence: ChargeEvidenceProvider | None = None,
+        plan_catalog: PlanCatalogProvider | None = None,
         id_factory: Callable[[], UUID] = uuid4,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
@@ -54,6 +61,7 @@ class SendSupportMessageService:
         self._current_plans = current_plans
         self._latest_bills = latest_bills
         self._charge_evidence = charge_evidence
+        self._plan_catalog = plan_catalog
         self._answer_generator = answer_generator
         self._exchanges = exchanges
         self._id_factory = id_factory
@@ -78,7 +86,20 @@ class SendSupportMessageService:
             created_at=self._clock(),
         )
 
-        if _is_ambiguous_charge_question(normalized_content):
+        if _is_plan_comparison_question(normalized_content):
+            plan = self._current_plans.get_current_plan(customer_id)
+            catalog = (
+                self._plan_catalog.get_plan_catalog()
+                if self._plan_catalog is not None
+                else None
+            )
+            exchange = self._plan_comparison_exchange(
+                user_message,
+                customer_id,
+                plan,
+                catalog,
+            )
+        elif _is_ambiguous_charge_question(normalized_content):
             exchange = self._charge_clarification_exchange(user_message)
         elif _is_unexpected_charge_question(normalized_content):
             bill = (
@@ -117,6 +138,57 @@ class SendSupportMessageService:
 
         self._exchanges.add(exchange)
         return exchange
+
+    def _plan_comparison_exchange(
+        self,
+        user_message: Message,
+        customer_id: UUID,
+        plan: CurrentPlanDetails | None,
+        catalog: PlanCatalogDetails | None,
+    ) -> MessageExchange:
+        today = self._clock().date()
+        if not _is_safe_comparison_input(plan, catalog, today):
+            return self._comparison_unavailable_exchange(user_message)
+        assert plan is not None
+        assert catalog is not None
+
+        snapshot = _snapshot_plan_comparison(
+            id_factory=self._id_factory,
+            customer_id=customer_id,
+            plan=plan,
+            catalog=catalog,
+            retrieved_at=self._clock(),
+        )
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=_format_plan_comparison(plan, catalog, snapshot.offers),
+            answer_status=AnswerStatus.GROUNDED,
+            uncertain=False,
+            evidence=(
+                EvidenceReference(
+                    type=EvidenceType.PLAN_COMPARISON_SNAPSHOT,
+                    id=snapshot.id,
+                ),
+            ),
+        )
+        return MessageExchange(
+            user_message=user_message,
+            assistant_message=assistant_message,
+            comparison_snapshot=snapshot,
+        )
+
+    def _comparison_unavailable_exchange(self, user_message: Message) -> MessageExchange:
+        assistant_message = self._assistant_message(
+            conversation_id=user_message.conversation_id,
+            content=(
+                "I can’t compare plans because the current plan or synthetic catalog data is "
+                "missing, incomplete, stale, conflicting, or not yet effective. Please request "
+                "human support."
+            ),
+            answer_status=AnswerStatus.UNAVAILABLE,
+            uncertain=True,
+        )
+        return MessageExchange(user_message, assistant_message)
 
     def _latest_bill_exchange(
         self,
@@ -405,9 +477,9 @@ class SendSupportMessageService:
         assistant_message = self._assistant_message(
             conversation_id=user_message.conversation_id,
             content=(
-                "I can currently explain your current mobile plan, summarize your latest bill, "
-                "or investigate the supported unexpected roaming charge. Other requests are not "
-                "implemented yet."
+                "I can currently explain or factually compare your mobile plan, summarize your "
+                "latest bill, or investigate the supported unexpected roaming charge. Other "
+                "requests are not implemented yet."
             ),
             answer_status=AnswerStatus.UNSUPPORTED,
             uncertain=True,
@@ -447,6 +519,19 @@ def _is_current_plan_question(content: str) -> bool:
             "mobile package",
             "mobile service",
         )
+    )
+
+
+def _is_plan_comparison_question(content: str) -> bool:
+    normalized = " ".join(findall(r"\w+", content.casefold()))
+    words = set(normalized.split())
+    return (
+        ("compare" in words and bool(words & {"plan", "plans"}))
+        or "other plans" in normalized
+        or "plan options" in normalized
+        or "available plan" in normalized
+        or "available plans" in normalized
+        or ("available" in words and bool(words & {"plan", "plans"}))
     )
 
 
@@ -500,6 +585,108 @@ def _is_reconciled_bill(bill: LatestBillDetails) -> bool:
     )
 
 
+def _is_safe_comparison_input(
+    plan: CurrentPlanDetails | None,
+    catalog: PlanCatalogDetails | None,
+    today: date,
+) -> bool:
+    if plan is None or catalog is None:
+        return False
+    if not (
+        plan.plan_code.strip()
+        and plan.plan_name.strip()
+        and plan.data_allowance_gb > 0
+        and plan.recurring_charge >= 0
+        and len(plan.currency) == 3
+        and plan.effective_from <= today
+        and plan.source_version.strip()
+        and catalog.source_version.strip()
+        and len(catalog.offers) == 3
+        and 0 <= (today - catalog.as_of).days <= 30
+    ):
+        return False
+
+    codes = [offer.plan_code for offer in catalog.offers]
+    names = [offer.plan_name for offer in catalog.offers]
+    return (
+        len(set(codes)) == len(codes)
+        and len(set(names)) == len(names)
+        and plan.plan_code not in codes
+        and all(
+            offer.plan_code.strip()
+            and offer.plan_name.strip()
+            and offer.data_allowance_gb > 0
+            and offer.recurring_charge >= 0
+            and offer.currency == plan.currency
+            and offer.effective_from <= today
+            for offer in catalog.offers
+        )
+    )
+
+
+def _snapshot_plan_comparison(
+    *,
+    id_factory: Callable[[], UUID],
+    customer_id: UUID,
+    plan: CurrentPlanDetails,
+    catalog: PlanCatalogDetails,
+    retrieved_at: datetime,
+) -> PlanComparisonSnapshot:
+    return PlanComparisonSnapshot(
+        id=id_factory(),
+        customer_id=customer_id,
+        current_plan_code=plan.plan_code,
+        current_plan_name=plan.plan_name,
+        current_data_allowance_gb=plan.data_allowance_gb,
+        current_recurring_charge=plan.recurring_charge,
+        currency=plan.currency,
+        current_effective_from=plan.effective_from,
+        catalog_as_of=catalog.as_of,
+        retrieved_at=retrieved_at,
+        source_version=catalog.source_version,
+        eligibility_verified=False,
+        offers=tuple(
+            PlanComparisonOfferSnapshot(
+                id=id_factory(),
+                plan_code=offer.plan_code,
+                plan_name=offer.plan_name,
+                data_allowance_gb=offer.data_allowance_gb,
+                recurring_charge=offer.recurring_charge,
+                currency=offer.currency,
+                effective_from=offer.effective_from,
+                recurring_charge_delta=offer.recurring_charge - plan.recurring_charge,
+                data_allowance_delta_gb=offer.data_allowance_gb - plan.data_allowance_gb,
+            )
+            for offer in catalog.offers
+        ),
+    )
+
+
+def _format_plan_comparison(
+    plan: CurrentPlanDetails,
+    catalog: PlanCatalogDetails,
+    offers: tuple[PlanComparisonOfferSnapshot, ...],
+) -> str:
+    offer_lines = " ".join(
+        (
+            f"{position}. {offer.plan_name}: {offer.data_allowance_gb} GB domestic data, "
+            f"{_format_money(offer.currency, offer.recurring_charge)} monthly recurring charge, "
+            f"effective {_format_date(offer.effective_from)}; compared with your current plan, "
+            f"{_format_charge_delta(offer.recurring_charge_delta, offer.currency)} and "
+            f"{_format_data_delta(offer.data_allowance_delta_gb)}."
+        )
+        for position, offer in enumerate(offers, start=1)
+    )
+    return (
+        f"Your current plan is {plan.plan_name}: {plan.data_allowance_gb} GB domestic data, "
+        f"{_format_money(plan.currency, plan.recurring_charge)} monthly recurring charge, "
+        f"effective {_format_date(plan.effective_from)}. Catalog-listed options as of "
+        f"{_format_date(catalog.as_of)}: {offer_lines} These are monthly recurring charges, not "
+        "total bills or projected savings; customer-specific eligibility is not verified. "
+        "I am not ranking or recommending a plan."
+    )
+
+
 def _charge_evidence_matches(
     bill: LatestBillDetails,
     line_item: BillLineItem,
@@ -535,6 +722,16 @@ def _format_amount(amount: Decimal) -> str:
     if amount == amount.to_integral_value():
         return f"{amount:,.0f}"
     return f"{amount:,.2f}"
+
+
+def _format_charge_delta(delta: Decimal, currency: str) -> str:
+    direction = "less" if delta < 0 else "more"
+    return f"{_format_money(currency, abs(delta))} {direction}"
+
+
+def _format_data_delta(delta: int) -> str:
+    direction = "less" if delta < 0 else "more"
+    return f"{abs(delta)} GB {direction}"
 
 
 def _format_date(value: date) -> str:

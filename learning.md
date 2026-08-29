@@ -258,3 +258,87 @@
   unchanged from the human-verified red baseline.
 - This closes the focused quality gap, but it remains a development checkpoint: real KDDI data,
   production identity, real representative delivery, and deployment remain outside the evidence.
+
+## 2026-08-27 — Selecting the next product increment
+
+- The focused MVP is now implemented and its current release gates pass, so the next work returns
+  to the three deferred customer goals: plan comparison, roaming guidance, and monthly savings.
+- A typed synthetic KDDI offer catalog is the shared prerequisite for all three. Starting with a
+  narrow current-plan-versus-available-plans comparison avoids embedding offer facts separately in
+  later roaming and savings logic.
+- The next product decision is whether to approve that catalog-backed plan-comparison slice before
+  adding recommendation rules or account-changing actions.
+
+## 2026-08-27 — Plan comparison approved
+
+- The human approved a read-only synthetic KDDI offer catalog and current-plan comparison as the
+  next post-0.1 feature.
+- This approval does not yet authorize personalized “best plan” claims. Factual comparison and
+  recommendation require different eligibility, preference, and safety contracts and should be
+  separated explicitly.
+- Plan changes remain out of scope; this agent explains and compares but does not mutate a KDDI
+  account.
+- The human approved the factual-only boundary: price, domestic data, effective date, and key
+  differences may be compared, but the first slice will not declare a personalized winner.
+- Three contrasting offers are enough to exercise factual tradeoffs without creating a large mock
+  catalog: lower cost/data, a nearby mid-tier, and higher cost/data. Preserving all three prevents
+  ordering from becoming an implicit recommendation.
+- The catalog is approved as typed external reference data behind a synthetic provider adapter, not
+  customer state in PostgreSQL. Source version and freshness metadata make replacement and stale-
+  data handling explicit.
+- “Catalog listed” is not the same as “available to this customer.” The approved response contract
+  discloses unverified eligibility and prohibits personalized availability claims until an
+  eligibility source exists.
+- Comparison output is transient, but its evidence must not be. An immutable PostgreSQL snapshot
+  will preserve the exact current plan, three offers, source version, and freshness metadata behind
+  each answer and expose a typed reference through conversation history.
+- Four-plan comparisons carry enough numeric claims that deterministic wording is the safer first
+  contract. MiniMax-M3 stays outside this path until a guard can prove completeness and reject
+  invented or omitted comparison facts.
+- Comparison integrity applies to the complete set. Missing, stale, conflicting, incomplete, or
+  ineffective inputs block the whole comparison rather than allowing a partial result to appear
+  comprehensive; the safe response explains the limitation and points to human support.
+- The approved three-offer fixture makes tradeoffs concrete around the existing 20 GB/JPY 4,500
+  plan: 5 GB/JPY 2,800, 30 GB/JPY 5,200, and 100 GB/JPY 7,500. Amounts are recurring plan charges,
+  never total-bill predictions.
+- Catalog freshness is a deterministic business rule: version `2026-08-28` remains usable through
+  age 30 days, age 31 is stale, and an injected clock makes both sides of that boundary testable.
+- Plan comparison remains part of the conversation resource. Reusing the message endpoint preserves
+  authentication, ownership, history, and evidence conventions while adding only an intent and
+  orchestration path.
+- Signed price and data deltas are derivable facts, but “monthly savings” is not: bills also depend
+  on usage, fees, taxes, discounts, and eligibility. The approved output draws that line explicitly.
+- One comparison snapshot is the atomic evidence unit: it binds the current plan, complete catalog,
+  source metadata, and derived deltas. Unsafe inputs produce no evidence-bearing snapshot, while
+  the safe unavailable exchange still remains in conversation history.
+- Plan comparison joins the singular evaluator as a fifth feature rather than receiving a separate
+  reassuring test command. The suite grows to 45 cases, with its own 5-case/80% routine gate and a
+  combined 20/20 safety requirement that retains every earlier case.
+- Normalized persistence follows the bill-snapshot precedent: one customer-owned comparison header,
+  three position-constrained offer rows, and one message evidence link. This keeps the evidence
+  atomic while allowing relational constraints to protect ordering and numeric facts.
+
+## 2026-08-29 — Factual plan comparison implemented locally
+
+- Red tests first confirmed the catalog/domain modules were absent, the API lacked catalog
+  composition, persistence records were absent, and the evaluator rejected the fifth feature.
+- The implementation keeps comparison in the existing support-message orchestration, because that
+  service already owns bill, charge, and plan intent routing; the new catalog remains isolated
+  behind its own provider port.
+- A complete unsafe catalog blocks the whole snapshot. Grounded persistence writes one header,
+  three ordered offers, the assistant message, and its evidence link in one transaction.
+- The original 36 evaluator rows were retained and nine rows appended. The resulting 45-case gate
+  is 5/5 for every feature and 20/20 safety; the full 130-test PostgreSQL suite also passes.
+- Freezing every clock call to one timestamp made the repository's UUID tie-breaker visible and
+  could place the assistant before the user in a test. Deterministic clocks should advance by tiny,
+  controlled increments when chronological ordering is part of the assertion.
+
+## 2026-08-29 — Factual plan comparison human-verified
+
+- The independent localhost response reproduced every approved current-plan fact, three catalog
+  offers, six signed deltas, catalog date, recurring-charge limitation, eligibility disclosure, and
+  one `plan_comparison_snapshot` reference.
+- The successful persisted response also demonstrates that migration `20260829_06` is active; the
+  automated PostgreSQL test separately proves ordered offer storage and history reconstruction.
+- The independent evaluator reproduced all five routine groups at 5/5, safety 20/20, and a passing
+  release gate, completing the comparison slice without weakening the original 36 cases.

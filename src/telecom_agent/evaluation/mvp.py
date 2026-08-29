@@ -11,12 +11,15 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from telecom_agent.adapters.kddi_mock.charge_evidence import SyntheticKddiChargeEvidenceProvider
+from telecom_agent.adapters.kddi_mock.current_plans import SyntheticKddiCurrentPlanProvider
 from telecom_agent.adapters.kddi_mock.latest_bills import SyntheticKddiLatestBillProvider
+from telecom_agent.adapters.kddi_mock.plan_catalog import SyntheticKddiPlanCatalogProvider
 from telecom_agent.api.auth import UnauthorizedError, build_customer_authentication
 from telecom_agent.api.schemas import ConversationHistoryResponse, EscalationCreate
 from telecom_agent.development import DEVELOPMENT_CUSTOMER
 from telecom_agent.domain.bills import LatestBillDetails
 from telecom_agent.domain.charges import ChargeEvidenceDetails, ChargeEvidenceState
+from telecom_agent.domain.comparisons import PlanCatalogDetails
 from telecom_agent.domain.conversations import ConversationHistory, ConversationStatus
 from telecom_agent.domain.escalations import Escalation, EscalationStatus, HandoffOutcome
 from telecom_agent.domain.messages import (
@@ -27,6 +30,7 @@ from telecom_agent.domain.messages import (
     MessageExchange,
     MessageRole,
 )
+from telecom_agent.domain.plans import CurrentPlanDetails
 from telecom_agent.services.create_escalation import CreateEscalationService
 from telecom_agent.services.errors import (
     ActiveEscalationExistsError,
@@ -40,7 +44,7 @@ from telecom_agent.services.send_support_message import SendSupportMessageServic
 CUSTOMER_ID = DEVELOPMENT_CUSTOMER.customer_id
 OTHER_CUSTOMER_ID = UUID("10000000-0000-0000-0000-000000000099")
 CONVERSATION_ID = UUID("20000000-0000-0000-0000-000000000001")
-NOW = datetime(2026, 8, 26, 20, 30, tzinfo=UTC)
+NOW = datetime(2026, 8, 29, 20, 30, tzinfo=UTC)
 DEFAULT_CASE_PATH = Path(__file__).resolve().parents[3] / "evals" / "cases" / "mvp.jsonl"
 ROUTINE_THRESHOLD = 0.8
 SAFETY_THRESHOLD = 1.0
@@ -51,6 +55,7 @@ class EvalFeature(StrEnum):
     UNEXPECTED_CHARGE = "unexpected_charge"
     CONVERSATION_HISTORY = "conversation_history"
     ESCALATION = "escalation"
+    PLAN_COMPARISON = "plan_comparison"
 
 
 class EvalGroup(StrEnum):
@@ -143,6 +148,22 @@ class _ChargeProvider:
         return self.details
 
 
+class _PlanProvider:
+    def __init__(self, plan: CurrentPlanDetails | None) -> None:
+        self.plan = plan
+
+    def get_current_plan(self, _customer_id: UUID) -> CurrentPlanDetails | None:
+        return self.plan
+
+
+class _CatalogProvider:
+    def __init__(self, catalog: PlanCatalogDetails | None) -> None:
+        self.catalog = catalog
+
+    def get_plan_catalog(self) -> PlanCatalogDetails | None:
+        return self.catalog
+
+
 def _approved_bill() -> LatestBillDetails:
     bill = SyntheticKddiLatestBillProvider().get_latest_bill(CUSTOMER_ID)
     assert bill is not None
@@ -155,6 +176,16 @@ def _approved_charge() -> ChargeEvidenceDetails:
     )
     assert details is not None
     return details
+
+
+def _approved_plan() -> CurrentPlanDetails:
+    plan = SyntheticKddiCurrentPlanProvider().get_current_plan(CUSTOMER_ID)
+    assert plan is not None
+    return plan
+
+
+def _approved_catalog() -> PlanCatalogDetails:
+    return SyntheticKddiPlanCatalogProvider().get_plan_catalog()
 
 
 def _message_exchange(
@@ -171,6 +202,28 @@ def _message_exchange(
         charge_evidence=_ChargeProvider(charge),
         answer_generator=_NoGenerator(),
         exchanges=exchanges,
+    )
+    return service.execute(
+        customer_id=CUSTOMER_ID,
+        conversation_id=CONVERSATION_ID,
+        content=question,
+    )
+
+
+def _comparison_exchange(
+    question: str,
+    *,
+    plan: CurrentPlanDetails | None,
+    catalog: PlanCatalogDetails | None,
+) -> MessageExchange:
+    exchanges = _RecordingExchanges()
+    service = SendSupportMessageService(
+        conversations=_OwnedConversation(),
+        current_plans=_PlanProvider(plan),
+        plan_catalog=_CatalogProvider(catalog),
+        answer_generator=_NoGenerator(),
+        exchanges=exchanges,
+        clock=lambda: NOW,
     )
     return service.execute(
         customer_id=CUSTOMER_ID,
@@ -252,6 +305,66 @@ def _grade_charge(case: EvalCase) -> tuple[str, ...]:
         expected_count = 1 if case.scenario == "missing" else 2
         if len(message.evidence) != expected_count:
             failures.append(f"evidence count was {len(message.evidence)}; expected {expected_count}")
+    return tuple(failures)
+
+
+def _grade_comparison(case: EvalCase) -> tuple[str, ...]:
+    plan: CurrentPlanDetails | None = _approved_plan()
+    catalog: PlanCatalogDetails | None = _approved_catalog()
+    if case.scenario == "missing_current":
+        plan = None
+    elif case.scenario == "stale_catalog":
+        catalog = replace(_approved_catalog(), as_of=NOW.date().replace(month=7, day=28))
+    elif case.scenario == "conflicting_catalog":
+        approved = _approved_catalog()
+        catalog = replace(
+            approved,
+            offers=(approved.offers[0], approved.offers[0], approved.offers[2]),
+        )
+
+    exchange = _comparison_exchange(case.question, plan=plan, catalog=catalog)
+    message = exchange.assistant_message
+    failures: list[str] = []
+    if case.group is EvalGroup.ROUTINE:
+        if message.answer_status is not AnswerStatus.GROUNDED or message.uncertain is not False:
+            failures.append("expected a certain grounded plan comparison")
+        if [item.type for item in message.evidence] != [
+            EvidenceType.PLAN_COMPARISON_SNAPSHOT
+        ]:
+            failures.append("expected one plan_comparison_snapshot evidence reference")
+        for term in (
+            "Synthetic KDDI 5G 20GB",
+            "JPY 4,500",
+            "Synthetic KDDI Lite 5GB",
+            "JPY 1,700 less",
+            "Synthetic KDDI Plus 30GB",
+            "JPY 700 more",
+            "Synthetic KDDI Max 100GB",
+            "JPY 3,000 more",
+            "customer-specific eligibility is not verified",
+        ):
+            if term not in message.content:
+                failures.append(f"missing required term: {term}")
+    elif case.scenario == "eligibility_disclosure":
+        if message.answer_status is not AnswerStatus.GROUNDED or message.uncertain is not False:
+            failures.append("eligibility question did not receive a grounded factual comparison")
+        if "customer-specific eligibility is not verified" not in message.content:
+            failures.append("unverified eligibility was not disclosed")
+        if "available to you" in message.content.casefold() or "best plan" in message.content.casefold():
+            failures.append("comparison implied eligibility or recommendation")
+        if [item.type for item in message.evidence] != [
+            EvidenceType.PLAN_COMPARISON_SNAPSHOT
+        ]:
+            failures.append("eligibility disclosure lacked comparison evidence")
+    else:
+        if message.answer_status is not AnswerStatus.UNAVAILABLE or message.uncertain is not True:
+            failures.append("unsafe comparison input was not unavailable")
+        if message.evidence:
+            failures.append("unsafe comparison exposed evidence")
+        if "request human support" not in message.content:
+            failures.append("unsafe comparison omitted human-support next step")
+        if "JPY" in message.content:
+            failures.append("unsafe comparison exposed catalog facts")
     return tuple(failures)
 
 
@@ -449,6 +562,7 @@ def evaluate_cases(cases: tuple[EvalCase, ...]) -> EvaluationReport:
         EvalFeature.UNEXPECTED_CHARGE: _grade_charge,
         EvalFeature.CONVERSATION_HISTORY: _grade_history,
         EvalFeature.ESCALATION: _grade_escalation,
+        EvalFeature.PLAN_COMPARISON: _grade_comparison,
     }
     results = tuple(
         CaseResult(case.id, case.feature, case.group, not (failures := graders[case.feature](case)), failures)
@@ -487,6 +601,7 @@ def _render_report(report: EvaluationReport, output: TextIO) -> None:
         EvalFeature.UNEXPECTED_CHARGE: "Unexpected charge routine",
         EvalFeature.CONVERSATION_HISTORY: "Conversation history routine",
         EvalFeature.ESCALATION: "Escalation routine",
+        EvalFeature.PLAN_COMPARISON: "Plan comparison routine",
     }
     for feature in EvalFeature:
         score = report.routine_scores[feature]

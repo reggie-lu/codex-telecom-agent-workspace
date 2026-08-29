@@ -25,7 +25,7 @@ Status: CONFIRMED
 - `UC-001`: Explain the customer's current mobile plan, allowances, and recurring charges.
 - `UC-002`: Explain the latest bill and relevant line items.
 - `UC-003`: Identify and explain an unexpected charge or clearly state when its cause is unknown.
-- `UC-004`: Compare available KDDI plans. Deferred beyond version 0.1.
+- `UC-004`: Compare available KDDI plans. Human-verified for the approved synthetic scenarios.
 - `UC-005`: Explain data roaming and better data or roaming options. Deferred beyond version 0.1.
 - `UC-006`: Recommend ways to lower monthly cost, including suitable family plans. Deferred beyond
   version 0.1.
@@ -37,7 +37,40 @@ Status: CONFIRMED
 
 Version 0.1 uses synthetic data to explain a current plan, answer latest-bill questions, investigate
 unexpected charges, preserve conversational follow-ups, and request contextual human escalation.
-Plan comparison, roaming guidance, and cost-saving recommendations are deferred.
+A read-only synthetic KDDI plan catalog and factual current-plan comparison is approved as the next
+post-0.1 feature. It will not declare a personalized best plan or change the account. Roaming
+guidance and cost-saving recommendations remain deferred. The first catalog contains three
+available synthetic offers spanning lower-cost/lower-data, mid-tier, and higher-cost/high-data
+positions; all three are compared without ranking.
+Catalog-listed offers must not be described as customer-eligible; the response explicitly states
+that customer-specific eligibility has not been verified.
+Missing, incomplete, stale, conflicting, or currently ineffective plan/catalog data blocks the
+comparison and produces an explicit unavailable response with a human-support next step.
+
+Approved initial synthetic catalog:
+
+- `Synthetic KDDI Lite 5GB`: 5 GB domestic data, JPY 2,800 monthly recurring charge.
+- `Synthetic KDDI Plus 30GB`: 30 GB domestic data, JPY 5,200 monthly recurring charge.
+- `Synthetic KDDI Max 100GB`: 100 GB domestic data, JPY 7,500 monthly recurring charge.
+
+These compare with `Synthetic KDDI 5G 20GB`: 20 GB and JPY 4,500 monthly recurring charge. None
+of these prices represents a total bill or establishes customer eligibility.
+
+Catalog version `synthetic-kddi-catalog-2026-08-28` is dated August 28, 2026 and remains current
+through an inclusive 30-day maximum age. Comparison becomes unavailable after that window until the
+synthetic source is refreshed.
+
+Customers invoke comparison through the existing authenticated conversation message endpoint with
+natural requests such as “Compare my current plan,” “What other plans are there?”, or “Show me
+available plan options.”
+
+Each grounded comparison states factual deltas from the current plan: Lite is JPY 1,700 and 15 GB
+lower; Plus is JPY 700 and 10 GB higher; Max is JPY 3,000 and 80 GB higher. These are monthly-
+recurring-charge and domestic-data differences, not predicted savings or recommendations.
+
+A valid comparison returns `grounded`, `uncertain: false`, and exactly one typed
+`plan_comparison_snapshot` evidence reference. Unsafe or unavailable input returns `unavailable`,
+`uncertain: true`, no evidence, and a human-support next step.
 
 Status: CONFIRMED
 
@@ -96,6 +129,9 @@ Status: CONFIRMED
 - Any safety-gate violation blocks release even if the routine score is at least 80%.
 - The initial current-plan baseline uses 10 routine and 6 safety/adversarial cases. Remaining MVP
   features will add their own representative cases as they are implemented.
+- Plan comparison extends the singular cross-feature suite from 36 to 45 cases: five independently
+  gated routine cases and four mandatory safety cases. Its routine threshold is at least 80%; the
+  combined safety gate grows from 16/16 to 20/20 and remains release-blocking.
 
 Status: CONFIRMED
 
