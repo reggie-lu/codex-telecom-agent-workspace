@@ -12,6 +12,7 @@ limitations while the prototype evolves.
 | Conversation entry | Authenticate a synthetic customer and create a conversation | Human verified |
 | Local operations | Stable seed, serve, health, and graceful-shutdown workflow | Human verified |
 | Current-plan support | Grounded plan messages with typed evidence and safe limitations | Human verified |
+| Plan comparison | Factual current-plan comparison with three catalog-listed synthetic offers | Human verified |
 | Model integration | Guarded SambaNova MiniMax-M3 wording for current-plan answers | Human verified |
 | Billing support | Latest-bill and unexpected-charge investigation | Human verified for approved synthetic scenarios |
 | Conversation history | Customer-scoped ordered messages and typed evidence references | Human verified |
@@ -606,3 +607,64 @@ Known limitations:
   MiniMax-M3 evaluation path.
 - Plan comparison, roaming-option comparison, savings recommendations, containers, Kubernetes,
   and public deployment remain deferred.
+
+### CP-013 — Factual Synthetic KDDI Plan Comparison
+
+- Recorded: 2026-08-29 16:47 JST
+- Classification: Human-verified development checkpoint; not a production release
+- Branch: `main`
+- Remote: `origin`
+- Implementation commit: `999fcb3d28d6141abb560e0ede9f52a188a0a94e`
+- Commit time: 2026-08-29 16:47:07 JST
+- Remote status: Included in the `origin/main` checkpoint push associated with this record
+
+Big-picture contribution: begins the post-0.1 customer-value roadmap with a durable, factual plan
+comparison foundation that future roaming and savings features can reuse without making unsupported
+recommendations or eligibility claims.
+
+Feature breakdown:
+
+- Natural comparison requests reuse the authenticated conversation message endpoint and route
+  before generic current-plan questions.
+- A typed, deterministic synthetic KDDI provider returns three source-ordered offers: Lite 5GB at
+  JPY 2,800/month, Plus 30GB at JPY 5,200/month, and Max 100GB at JPY 7,500/month.
+- Canonical output compares all three with the current 20 GB/JPY 4,500 plan and shows signed
+  recurring-charge and domestic-data deltas without ranking, projected savings, or MiniMax-M3.
+- Every grounded response states that the offers are catalog listed and customer-specific
+  eligibility is unverified.
+- Catalog version `synthetic-kddi-catalog-2026-08-28` uses an injected UTC clock and a 30-day
+  inclusive freshness window. Missing, incomplete, stale, conflicting, mixed-currency, or
+  ineffective input fails closed with no comparison evidence and a human-support next step.
+- Migration `20260829_06` adds customer-owned comparison snapshots, three ordered offer rows, and
+  assistant-message evidence links. History reconstructs `plan_comparison_snapshot` references.
+- The singular evaluator preserves its original 36 rows and adds five comparison routine plus four
+  safety cases, expanding the release gate to 45 cases and 20 mandatory safety cases.
+
+Verification evidence:
+
+- Codex verification: all 130 pytest tests passed with PostgreSQL integration enabled; Ruff and
+  strict mypy passed across 78 source files.
+- Migration `20260829_06` applied to local PostgreSQL and `alembic check` reported no new upgrade
+  operations.
+- Existing current-plan gate remained 10/10 routine and 6/6 safety with a passing release gate.
+- Expanded cross-feature gate scored 5/5 for latest bill, unexpected charge, conversation history,
+  contextual escalation, and plan comparison; safety scored 20/20 and the release gate passed.
+- Human localhost verification on 2026-08-29 returned the complete four-plan comparison with all
+  six approved deltas, both limitations, `grounded`, `uncertain: false`, and comparison evidence
+  `cec830d9-0a91-42e3-98bc-daec0c7bdb12`.
+- Human evaluation independently reproduced all five 5/5 routine scores, 20/20 safety, and
+  `Release gate: PASS`.
+- Reproduction steps: see `README.md`, sections **Manual API Verification** and
+  **Cross-Feature MVP Evaluation**.
+
+Known limitations:
+
+- The catalog and current customer are synthetic; no claim reflects live KDDI pricing,
+  availability, eligibility, discounts, taxes, or account state.
+- The catalog becomes stale after 2026-09-27 and must be explicitly refreshed before comparison can
+  resume. This deliberate fail-closed behavior prevents outdated offers from appearing current.
+- The feature does not recommend a best plan, predict total-bill savings, compare roaming benefits,
+  support family-plan eligibility, or change the account.
+- Comparison wording is deterministic. A future model-written path requires its own grounding guard
+  and evaluation gate.
+- Runtime remains localhost-only; Docker, Kubernetes, and public deployment remain deferred.
